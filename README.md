@@ -2,7 +2,7 @@
 Vote for a list of Lisk Delegates (https://lisk.io)
 
 This is an Autohotkey script for voting Lisk Delegates.
-
+You can find Autohotkey here: https://autohotkey.com/
 Few nodes and warnings:
 - This script written in AHK, windows only. Should work with any windows WinXP+
 - Script not compiled, download and install Autohotkey and run you can run any .ahk file, or you can compile it with ahk2exe in the install dir.
