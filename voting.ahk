@@ -1,4 +1,4 @@
-;### some initialisation ###
+;### some initialisation ####
 #SingleInstance force
 #Persistent
 #NoEnv
