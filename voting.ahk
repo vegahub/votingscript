@@ -28,7 +28,7 @@ votinglist = Vega`n
 Ifexist votinglist.txt
 	FileRead votinglist, votinglist.txt
 
-node := "https://login.lisk.io",html:=""
+node := "https://testnet.lisk.io",html:=""
 ; if settings saved, read from file
 IfExist settings.txt
 	loop,read,settings.txt
