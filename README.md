@@ -4,13 +4,21 @@ Vote for a list of Lisk Delegates (https://lisk.io)
 This is an Autohotkey script for voting Lisk Delegates.
 You can find Autohotkey here: https://autohotkey.com/
 
+Current features:
+
+- You only need to provide your passphrase and it works
+- You can vote/unvote with up to 5 accounts simultaneously (the first should always be your delegate account)
+- Displays some basic account information
+- Displays full registered delegate list
+- Filter list by providing a list of delegate names, addresses or public keys, or any mix of them
+- Shows what delegate you already voted for, who voted you back
+- Can vote, unvote with up to 5 accounts  at once
+
 Few nodes and warnings:
 - This script written in AHK, windows only. Should work with any windows WinXP+
-- Script not compiled, download and install Autohotkey and run you can run any .ahk file, or you can compile it with ahk2exe in the install dir.
-- It can vote for delegate username, lisk account address or public key. You can mix them on the list.
-- One name/address/key per line
-- Didn't test it too much, let me know if there is any problems
-- Doesn't work if second passphrase is set for voting account. will add for mainnnet
-- Always be cautious with your passphrase! For this reason I'd prefer if someone would check my code, verifing that there is nothing hinky in it.
-- The default node is login.lisk.io, but it's slow, provide your own node address if you can
-- also recommend that you only use https address, as the script will need to send your passphrase to the node. 
+- You can save passphrases but it will be in plain text, please be carefull. For security reasons it won't save second passphrases, it will ask for it when needed (voting)
+- If some information is not updating after voting, please wait a few and use "Update All Data" button. This is because sometimes the votes doesn't get included into the blockchain fast enough, I'll automate checking later
+- if you vote for more than one delegate at the time, the vote will be bundled into one transaction. if you selected more than 33 delegates it will be split into as many transactions as necessary.
+- if you selected more delegates than voting spots you have left, it will cast what it can, and ignore the additional votes (needs testing)
+- if you already voted for 101 delegates, any additional votes will simple be ignored
+- There may be some quirks in this version, and some bugs. Let me know if you find any.
