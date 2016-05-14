@@ -415,7 +415,7 @@ If !votinglist
 		rowcount++		
 		;  get who voted for this delegate
 		if rowcount = 1		; get list only once
-			votes := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/delegates/voters?publicKey=" delegate_publickey)))
+			votes := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/delegates/voters?publicKey=" voterpubkey_1)))
 
 		votedback := "NO"		
 		Ifinstring votes, %delegate_address%
@@ -429,8 +429,6 @@ If !votinglist
 			Ifinstring votes, %delegate_address%
 				votedback := "YES"
 			}
-	
-
 		LV_Insert(rowcount,"","",rowcount,delegate_rate,delegate_username,delegate_address,votedfor1,votedfor2,votedfor3,votedfor4,votedfor5,votedback,delegate_approval,delegate_producedblocks,delegate_missedblocks,delegate_productivity,delegate_publickey)
 
 		
@@ -480,7 +478,7 @@ loop, parse, votinglist, `n,`r
 		
 		;  get who voted for this delegate
 		if rowcount = 1		; get list only once
-			votes := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/delegates/voters?publicKey=" delegate_publickey)))
+			votes := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/delegates/voters?publicKey=" voterpubkey_1)))
 
 		if !isdelegate_1		; voter is not delegate, don't display voteback
 			votedback := ""		
@@ -490,7 +488,6 @@ loop, parse, votinglist, `n,`r
 			Ifinstring votes, %delegate_address%
 				votedback := "YES"
 			}
-			
 		LV_Insert(rowcount,"","",rowcount,delegate_rate,delegate_username,delegate_address,votedfor1,votedfor2,votedfor3,votedfor4,votedfor5,votedback,delegate_approval,delegate_producedblocks,delegate_missedblocks,delegate_productivity,delegate_publickey)
 
 	if ((votedfor1 = "NO" OR votedfor2 = "NO" OR votedfor3 = "NO" OR votedfor4 = "NO" OR votedfor5 = "NO") AND delegate_rate)
@@ -646,7 +643,7 @@ Loop		; get selected rows from lisview
 			continue
 		
 		if tovotelist%accountnum%
-			if tovotecount%a_index% = 33		; bulk vote max
+			if tovotecount%a_index% = 33		; bulk vote maximum allowed
 				tovotelist%accountnum% .= "|", tovotecount%a_index% := 0
 		else	
 			tovotelist%accountnum% .= ","
@@ -707,9 +704,12 @@ secdata:=""
 	oHTTP.Send(data)
 	responsetext := oHTTP.ResponseText
 	
+	newline := "Server response: " responsetext
+	
+	
 	Ifinstring responsetext, "success":true
 		{
-		newline := "Account " count " voted for: " tovotecount%count% " delegate(s)"
+		newline := "Account " count " voting for: " tovotecount%count% " delegate(s)"
 		if voteprefix = -
 			newline := "Account " count " unvoted " tovotecount%count% " delegate(s)"
 		}
