@@ -1,0 +1,9 @@
+// This is a list of (potential) Lisk delegates that I can recommend you vote for.
+// My voting tool will download this list upon request, you don't have to do anything with this file.
+// You are of course under no obligation to vote this list, this is just for those who can't make their own research into potential delegates, but want to vote to help secure the network.
+// I'll keep this list as up to date as I can.
+
+vega
+7621048351401864465L	
+Max
+
