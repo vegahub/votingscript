@@ -372,8 +372,9 @@ accountcount++
 	oHTTP.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded") 
 	oHTTP.Send("secret=" passphrase)	;Send POST request
 	voterinfo := oHTTP.ResponseText
+	clipboard := voterinfo
 
-	regexmatch(voterinfo,"i){""success"":true,""account"":{""address"":""(.*?)"",""unconfirmedBalance"":""(.*?)"",""balance"":""(.*?)"",""publicKey"":""(.*?)"",""unconfirmedSignature"":0,""secondSignature"":(.*?),""secondPublicKey"":(.*?),""multisignatures"":(.*?),""u_multisignatures"":(.*?)}}",d)	
+	regexmatch(voterinfo,"i){""success"":true,""account"":{""address"":""(.*?)"",""unconfirmedBalance"":""(.*?)"",""balance"":""(.*?)"",""publicKey"":""(.*?)"",""unconfirmedSignature"":.,""secondSignature"":(.*?),""secondPublicKey"":(.*?),""multisignatures"":(.*?),""u_multisignatures"":(.*?)}}",d)	
 
 	if d
 		{
