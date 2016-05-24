@@ -34,4 +34,4 @@ Few nodes and warnings:
 
 Screenshot
 
-![Alt text](http://i.imgur.com/X2AuHj4.png "Optional Title")
+![Alt text](http://i.imgur.com/X2AuHj4.png "Screenshot")
