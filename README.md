@@ -4,6 +4,14 @@ Vote for a list of Lisk Delegates (https://lisk.io)
 This is an Autohotkey script for voting Lisk Delegates.
 You can find Autohotkey here: https://autohotkey.com/
 
+Changelog
+v0.2.5 
+	- Changed input fields behavior to improve reliability
+	- To prevent accidental selections, row checkbox selection now works with right click instead of left click
+	- copy selected rows from delegate list with CTRL+C (rank,username,address) 
+	- Button to get my recommended delegate list
+	- some small improvements
+	
 Current features:
 
 - You only need to provide your passphrase and it works

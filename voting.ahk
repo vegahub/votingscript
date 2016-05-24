@@ -1,5 +1,15 @@
 ﻿;### some initialisation ###
 
+/*
+Changelog
+v0.2.5 
+	- Changed input fields behavior to improve reliability
+	- To prevent accidental selections, row checkbox selection now works with right click instead of left click
+	- copy selected rows from delegate list with CTRL+C (rank,username,address) 
+	- Button to get my recommended delegate list
+	- some small improvements
+*/
+
 #SingleInstance force
 #Persistent
 #NoEnv
@@ -14,7 +24,7 @@ GroupAdd justthiswin, %A_ScriptName% - Notepad	; for editing purposes
 WinHttpReq:=ComObjCreate("WinHttp.WinHttpRequest.5.1")	
 oHTTP := ComObjCreate("WinHttp.WinHttpRequest.5.1")
 ;############# default settings ###########
-node := "https://testnet.lisk.io"
+node := "https://login.lisk.io"
 ini := SubStr(A_ScriptName, 1,-4) ".ini"
 
 ;############### read ini file ###############
@@ -77,19 +87,20 @@ Gui,Add, GroupBox, section x580 y155 w250 0x300 0x8000 cDC8G86 h50,Node (URL wit
 gui, font,s8, 
 Gui,Add, Edit, xs+10 ys+20 -E0x200 w230 vnode gnodecheck, %node%
 
-Gui,Add,Edit,w180 x15 y280 h600 -E0x200 section hwndhwndVotinglist vVotinglist  gTransferlist,%votinglist%
+Gui,Add,Edit,w185 x15 y280 h600 -E0x200 section hwndhwndVotinglist vVotinglist  gTransferlist,%votinglist%
 
 Gui Add, ListView, xp+197 y280 w1050 h600 -E0x200 -LV0x10 Checked AltSubmit glistview, Votefor|#|Rank|Username|Lisk Address|Voted|Voted2|Voted3|Voted4|Voted5|Voted you|Approval|Blocks|Missed Blocks|Productivity|pubkey
 
 LV_ModifyCol(1, "Right"), LV_ModifyCol(2, "Integer"), LV_ModifyCol(3,  "Integer"), LV_ModifyCol(12, "Integer"), LV_ModifyCol(13, "Integer"),LV_ModifyCol(14, "Integer"),LV_ModifyCol(15, "Integer 90"), LV_ModifyCol(16, 0),LV_ModifyCol(7, 0),LV_ModifyCol(8, 0),LV_ModifyCol(9, 0),LV_ModifyCol(10, 0),LV_ModifyCol(11, 0)
 
 gui, font,s10, 
-Gui, Add, GroupBox, x15 y210 w182 h670 0x300 0x8000 cDC8G86, Delegate Filter
+Gui, Add, GroupBox, x15 y210 w187 h670 0x300 0x8000 cDC8G86, Delegate Filter
 Gui, Add, GroupBox, x210 y210 w1052 h670 0x300 0x8000 cDC8G86, Delegate List
 gui, font,s8, 
-Gui, Add, Button, x30 y235 -Theme gloadlist h15, &Load list
+Gui, Add, Button, x20 y228 -Theme ggetlist h15, Recommended Delegates
+Gui, Add, Button, x40 y245 -Theme gloadlist h15, &Load list
 Gui, Add, Button, x+5 yp -Theme gSavelist h15, &Save list
-Gui, Add, Button, x55 yp+25 -Theme gClearlist h15, &Clear filter
+Gui, Add, Button, x65 yp+18 -Theme gClearlist h15, &Clear filter
 
 Gui, Add, Button, x220 y232 -Theme h15 gselectall, Select All
 Gui, Add, Button, xp yp+23 -Theme h15 gunselectall, Unselect All
@@ -119,13 +130,16 @@ Gui Show, w1300 h900 Center,Lisk Delegate Voting
 ;Gui Show, w1300 h900 x650,Lisk Delegate Voting
 ControlFocus , , Lisk Delegate Voting
 
+OnMessage(0x200, "WM_MOUSEMOVE")
+
+GroupAdd Self, % "ahk_pid " DllCall("GetCurrentProcessId") ; Create an ahk_group "Self" and make all the current process's windows get into that group.
 
 startcheck:
 If node
-	gosub nodecheck
+	gosub nodecheck_enter
 	
 If pass1
-	gosub Accountinfo
+	gosub Accountinfo_enter
 
 updateinfo:
 if statuscheck = true
@@ -133,19 +147,63 @@ if statuscheck = true
 
 gosub getvotedlist
 	
-gosub transferlist	
+gosub transferlist_enter
 	
 	return
 
+;############ tooltip helper #######
+
+
+WM_MOUSEMOVE()
+{
+    static CurrControl, PrevControl, _TT  ; _TT is kept blank for use by the ToolTip command below.
+	if A_GuiControl not in Recommended Delegates,votinglist
+		{
+		Tooltip
+		return
+		}
+		
+	
+	if A_GuiControl = Recommended Delegates
+		Tooltip Delegates I (Vega) personally recommend you give your vote for.`nThe list is up to date`, downloaded from GitHub
+	if A_GuiControl = votinglist
+		Tooltip Type (or paste a list of) delegate names`, or `naddresses here to filter the full delegate list
+		
+	return	
+}
+
 	
 ;######## BUTTON actions #########	
+getlist:
+url := "https://raw.githubusercontent.com/vegahub/votingscript/master/recommend.txt"
+newline := "Getting a fresh list of recommended delegates from GitHub"
+gosub updatestatus
+UrlDownloadToFile, %URL%, recommend_list.txt
+
+recommend_list:=""
+loop, read, recommend_list.txt
+	{
+	Ifinstring a_loopreadline, //
+		continue
+	if !a_loopreadline
+		continue
+	recommend_list .= a_loopreadline "`n"	
+	}
+
+if !recommend_list
+	return
+GuiControl,, edit13, %recommend_list%
+sleep 20
+gosub transferlist_enter
+return
+
 loadlist:
 Ifexist votinglist.txt
 	FileRead votinglist, votinglist.txt
 if !votinglist	
 	return
 GuiControl,, edit13, %votinglist%
-gosub transferlist
+gosub transferlist_enter
 return
 
 Clearlist:
@@ -153,7 +211,7 @@ gui submit,NoHide
 GuiControl,, edit13,
 If !votinglist
 	return
-gosub transferlist
+gosub transferlist_enter
 return
 
 Savelist:
@@ -190,17 +248,20 @@ GuiControl,, % info3 ,% "Delegates Selected: " checkedrow
 Return 
 
 listview:	; check/uncheck rows checkbox on click
+;msgbox % A_GuiControl "`n" A_GuiEvent
+;https://autohotkey.com/docs/commands/ListView.htm#G-Label_Notifications_Secondary
 rownum := A_EventInfo
-if !InStr(ErrorLevel, "S", true)	; row selected
-	Return
+;if !InStr(ErrorLevel, "S", true)	; row selected
+;	Return
 SendMessage, 4140, rownum - 1, 0xF000, SysListView321  ; 4140 is LVM_GETITEMSTATE.  0xF000 is LVIS_STATEIMAGEMASK.
 IsChecked := (ErrorLevel >> 12) - 1  ; This sets IsChecked to true if RowNumber is checked or false otherwise.	
-if IsChecked = 1
+
+if (IsChecked = "1" AND A_GuiEvent = "Rightclick")
 	{
 	LV_Modify(rownum, "-Check")
 	checkedrow--
 	}
-Else
+if (IsChecked != "1" AND A_GuiEvent = "Rightclick")
 	{
 	LV_Modify(rownum, "+Check")
 	checkedrow++
@@ -263,10 +324,18 @@ ExitApp
 
 ;######## get account info based on passphrase ##########
 Accountinfo:
-accountcount:=0
-loop 
-	If A_TimeIdlePhysical > 1000
+GuiControlGet, controlcalled, FocusV
+GuiControlGet, controlcalled2, FocusV
+while (controlcalled = controlcalled2)
+	{
+	sleep 50
+	GuiControlGet, controlcalled2, FocusV
+	if a_index = 3000	; so it wont hung
 		break
+	}
+
+Accountinfo_enter:
+accountcount:=0
 Gui, submit,nohide	
 
 if !notsecureok
@@ -296,7 +365,7 @@ loop 5 {
 		}
 		
 accountcount++	
-		
+
 	newline := "Getting Account info for passphrase " c
 	gosub updatestatus
 	oHTTP.Open("POST", node "/api/accounts/open" , False)	;Post request
@@ -326,21 +395,86 @@ accountcount++
 		}
 
 		
-	if A_GuiControl			; if specific field called it, break the loop
-		break
+	;if A_GuiControl			; if specific field called it, break the loop
+	;	break
 
 }
 if A_GuiEvent = Normal
 	gosub getvotedlist
 return
 
+
+
+#IfWinActive ahk_group Self
+~enter::			; so enter saves changes in input fields
+~NumpadEnter::
+~Tab::
+GuiControlGet, controlcalled, FocusV
+
+if controlcalled not in node,pass1,pass2,pass3,pass4,pass5,pass1_2,pass2_2,pass3_2,pass4_2,pass5_2,votinglist
+	return
+
+If (controlcalled = "votinglist")	
+	goto transferlist_enter
+	
+ControlFocus ,,
+
+If (controlcalled = "node")
+	goto nodecheck_enter
+
+If controlcalled in pass1,pass2,pass3,pass4,pass5,pass1_2,pass2_2,pass3_2,pass4_2,pass5_2
+	goto Accountinfo_enter
+return
+
+; copy selected rows to clipboard
+~^c::
+GuiControlGet, controlcalled, Focus
+If controlcalled != sysListView321
+	return
+
+sellist:="",rowNumber := 0,rowcount:=0
+Loop
+{
+    RowNumber := LV_GetNext(RowNumber)  ; Resume the search at the row after that found by the previous iteration.
+    if not RowNumber  ; The above returned zero, so there are no more selected rows.
+        break
+		
+	row:=""
+	loop % LV_GetCount("Column") 
+		{
+		if a_index in 3,4,5
+			{
+			LV_GetText(x, RowNumber,a_index)
+			If x
+				row .= x a_tab
+			}	
+		}
+		
+	sellist .= row "`n"	
+	rowcount++
+}
+clipboard := sellist
+newline := rowcount " delegates info was copied to the clipboard"
+gosub updatestatus
+return
+
+
 ;#### check if provided node url is working (send sync api call)
 nodecheck:
-loop 
-	If A_TimeIdlePhysical > 500
+GuiControlGet, controlcalled, FocusV
+
+
+while (controlcalled = "node")
+	{
+	sleep 50
+	GuiControlGet, controlcalled, FocusV
+	if a_index = 3000	; so it wont hung
 		break
-		
-Gui, submit,nohide		
+	}
+
+nodecheck_enter:
+Gui, submit,nohide	
+	
 if SubStr(node, 0) = "/"
 	node := SubStr(node, 1,-1)
 
@@ -369,13 +503,21 @@ return
 
 ;##### parse delegate list (or filtered list) and display in table. check for votes) ##
 transferlist:
-loop 
-	If A_TimeIdlePhysical > 250
-		break
 
-		
-rowcount:="0"
+GuiControlGet, controlcalled, FocusV
+
+while (controlcalled = "votinglist")
+	{
+	sleep 50
+	GuiControlGet, controlcalled, FocusV
+	if a_index = 3000	; so it wont hung
+		break
+	}
+
+transferlist_enter:
 Gui, submit,nohide
+
+rowcount:="0"	
 LV_Delete()
 
 LV_ModifyCol(16, 0),LV_ModifyCol(7, 0),LV_ModifyCol(8, 0),LV_ModifyCol(9, 0),LV_ModifyCol(10, 0),LV_ModifyCol(11, 0)
@@ -522,7 +664,9 @@ loop % LV_GetCount()
 
 if isdelegate_1
 	LV_ModifyCol(11, 80)	; show voted you column
-	
+
+	if !isdelegate_1
+	LV_ModifyCol(11, 0)	; show voted you column
 LV_ModifyCol(1,"25")
 delegatelistcount := LV_GetCount()
 GuiControl,,%info2%,Delegates displayed: %delegatelistcount%
@@ -709,9 +853,9 @@ secdata:=""
 	
 	Ifinstring responsetext, "success":true
 		{
-		newline := "Account " count " voting for: " tovotecount%count% " delegate(s)"
+		newline := "Account " count " successfully voted for: " tovotecount%count% " delegate(s)"
 		if voteprefix = -
-			newline := "Account " count " unvoted " tovotecount%count% " delegate(s)"
+			newline := "Account " count " successfully unvoted " tovotecount%count% " delegate(s)"
 		}
 	Ifinstring responsetext, "error"
 		newline := "Account " count " Error: " RegExReplace(responsetext,".*error"":""(.*?)"".*","$1")
@@ -720,13 +864,11 @@ secdata:=""
 	}
 	
 }
-newline := "Waiting 20 secs for Lisk to process new votes"
+newline := "Waiting 15 secs for Lisk to process new votes"
 gosub updatestatus	
 
-sleep 20000					; wait 20 seconds
-gosub getdelegatelist			; update delegate info
-gosub transferlist			; update table	
-gosub getvotedlist	
+sleep 15000					; wait 15 seconds
+gosub startcheck			; update delegate info
 return
 
 
