@@ -1,4 +1,5 @@
-# votingscript
+
+# Windows Voting Tool
 Vote for a list of Lisk Delegates (https://lisk.io)
 
 This is an Autohotkey script for voting Lisk Delegates.
@@ -30,3 +31,7 @@ Few nodes and warnings:
 - if you selected more delegates than voting spots you have left, it will cast what it can, and ignore the additional votes (needs testing)
 - if you already voted for 101 delegates, any additional votes will simple be ignored
 - There may be some quirks in this version, and some bugs. Let me know if you find any.
+
+Screenshot
+
+![Alt text](http://i.imgur.com/X2AuHj4.png "Optional Title")
