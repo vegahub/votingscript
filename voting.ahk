@@ -87,14 +87,14 @@ Gui,Add, GroupBox, section x580 y155 w250 0x300 0x8000 cDC8G86 h50,Node (URL wit
 gui, font,s8, 
 Gui,Add, Edit, xs+10 ys+20 -E0x200 w230 vnode gnodecheck, %node%
 
-Gui,Add,Edit,w185 x15 y280 h600 -E0x200 section hwndhwndVotinglist vVotinglist  gTransferlist,%votinglist%
+Gui,Add,Edit,w195 x15 y280 h600 -E0x200 section hwndhwndVotinglist vVotinglist  gTransferlist,%votinglist%
 
 Gui Add, ListView, xp+197 y280 w1050 h600 -E0x200 -LV0x10 Checked AltSubmit glistview, Votefor|#|Rank|Username|Lisk Address|Voted|Voted2|Voted3|Voted4|Voted5|Voted you|Approval|Blocks|Missed Blocks|Productivity|pubkey
 
 LV_ModifyCol(1, "Right"), LV_ModifyCol(2, "Integer"), LV_ModifyCol(3,  "Integer"), LV_ModifyCol(12, "Integer"), LV_ModifyCol(13, "Integer"),LV_ModifyCol(14, "Integer"),LV_ModifyCol(15, "Integer 90"), LV_ModifyCol(16, 0),LV_ModifyCol(7, 0),LV_ModifyCol(8, 0),LV_ModifyCol(9, 0),LV_ModifyCol(10, 0),LV_ModifyCol(11, 0)
 
 gui, font,s10, 
-Gui, Add, GroupBox, x15 y210 w187 h670 0x300 0x8000 cDC8G86, Delegate Filter
+Gui, Add, GroupBox, x15 y210 w195 h670 0x300 0x8000 cDC8G86, Delegate Filter
 Gui, Add, GroupBox, x210 y210 w1052 h670 0x300 0x8000 cDC8G86, Delegate List
 gui, font,s8, 
 Gui, Add, Button, x20 y228 -Theme ggetlist h15, Recommended Delegates
@@ -372,7 +372,6 @@ accountcount++
 	oHTTP.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded") 
 	oHTTP.Send("secret=" passphrase)	;Send POST request
 	voterinfo := oHTTP.ResponseText
-	clipboard := voterinfo
 
 	regexmatch(voterinfo,"i){""success"":true,""account"":{""address"":""(.*?)"",""unconfirmedBalance"":""(.*?)"",""balance"":""(.*?)"",""publicKey"":""(.*?)"",""unconfirmedSignature"":.,""secondSignature"":(.*?),""secondPublicKey"":(.*?),""multisignatures"":(.*?),""u_multisignatures"":(.*?)}}",d)	
 
@@ -454,7 +453,7 @@ Loop
 	sellist .= row "`n"	
 	rowcount++
 }
-clipboard := sellist
+
 newline := rowcount " delegates info was copied to the clipboard"
 gosub updatestatus
 return
@@ -553,6 +552,7 @@ If !votinglist
 		votedfor%a_index% := "NO"
 		ifinstring voted_%a_index%, %delegate_address%	; ignore account you already voted for
 			votedfor%a_index% := "YES"
+			
 		}	
 	
 		rowcount++		
@@ -560,6 +560,7 @@ If !votinglist
 		if rowcount = 1		; get list only once
 			votes := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/delegates/voters?publicKey=" voterpubkey_1)))
 
+	
 		votedback := "NO"		
 		Ifinstring votes, %delegate_address%
 			votedback := "YES"
@@ -712,7 +713,6 @@ newline := "Getting list of accounts you voted for"
 loop 5 {
 if !voteraddress_%a_index%
 	continue
-
 voted_%a_index% := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/accounts/delegates/?address=" voteraddress_%a_index%)))
 
 StringReplace, voted_%a_index%, voted_%a_index%, username, username, UseErrorLevel
@@ -759,6 +759,13 @@ loop % accountcount
 	
 Gui, submit,nohide	
 RowNumber:=0
+	
+loop 5 
+	{
+	voted_%a_index% := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/accounts/delegates/?address=" voteraddress_%a_index%)))
+	tovotelist%a_index% :="", novotecount%a_index%:="",tovotecount%a_index%:=""	
+	}
+	
 Loop		; get selected rows from lisview 
 {
 	RowNumber := LV_GetNext(RowNumber,"checked")
@@ -766,34 +773,37 @@ Loop		; get selected rows from lisview
 		break
 	countselected := a_index	
 	LV_GetText(publickey, RowNumber,"16")	; get public key			
+	LV_GetText(un, RowNumber,"4")
+	
 	
 	loop 5 {
-		colnum := a_index + 5,accountnum := a_index
-		LV_GetText(voted, RowNumber,colnum)	; get voted with account status
+	
+	if !voted_%a_index%
+		continue
 		
-		if ((voteprefix = "+" AND voted = "NO") OR (voteprefix = "-" AND voted = "YES"))
-			{
-			tovote = "%voteprefix%%publickey%"
-			tovotecount%a_index%++
-			}
-						
-					
-		if ((voteprefix = "-" AND voted = "NO") OR (voteprefix = "+" AND voted = "YES"))
-			novotecount%accountnum%++
-			
-		if !tovote
-			continue
-
+	if ((voteprefix = "+" AND !InStr(voted_%a_index%, publickey)) OR (voteprefix = "-" AND InStr(voted_%a_index%, publickey))) 
+		{	
 		if ((voteprefix = "+") AND (tovotecount%a_index% > (101 - votedcount_%a_index%) - 1))	; no more voting spots for account
 			continue
+
+		tovote = "%voteprefix%%publickey%"
+		tovotecount%a_index%++
+		}
+	else
+		novotecount%a_index%++
 		
-		if tovotelist%accountnum%
-			if tovotecount%a_index% = 33		; bulk vote maximum allowed
-				tovotelist%accountnum% .= "|", tovotecount%a_index% := 0
-		else	
-			tovotelist%accountnum% .= ","
-			
-		tovotelist%accountnum% .= tovote
+	if !tovote
+		continue
+		
+	if tovotelist%a_index%
+		if tovotecount%a_index% = 33		; bulk vote maximum allowed
+			tovotelist%a_index% .= "|", tovotecount%a_index% := 0
+	else	
+		tovotelist%a_index% .= ","
+		
+	tovotelist%a_index% .= tovote
+	tovotelist%a_index%_names .= un "`n"
+
 	}	
 
 }
@@ -810,19 +820,23 @@ loop % accountcount {			; vote from every account
 count := a_index
 if votemaxed_%a_index% = 1	
 	continue
+votingfor_count := countselected - novotecount%count%
 
-
-newline := "Account " count " already voted for " novotecount%count% " voting for: " countselected - novotecount%count%
+newline := "Account " count " already voted for " novotecount%count% " voting for: " votingfor_count
 if voteprefix = -
-	newline := "Account " count " unvoting " countselected - novotecount%count%
+	newline := "Account " count " unvoting " votingfor_count
 gosub updatestatus	
+
+if votingfor_count = 0
+	continue
 
 secdata:=""
 	passphrase := pass%count%, voterpubkey := voterpubkey_%count%, secondpassphrase := pass_%count%_2
 	
-	stringsplit tovotelist,tovotelist%count%,|	
-		
-	if (secondsig_%count% > 0 AND tovotelist0 > 0)	; there is a second passphrase for this account
+	stringsplit tovotelistpart,tovotelist%count%,|	
+	
+	
+	if (secondsig_%count% > 0 AND tovotelistpart0 > 0)	; there is a second passphrase for this account
 		{
 		Prompt := "Your account " voteraddress_%count% " has a second passphrase`n`nPlease enter it here" 
 		if !secondpassphrase
@@ -837,12 +851,15 @@ secdata:=""
 			}
 		}
 
-
-	loop % tovotelist0 ; send the vote api calls
+	loop % tovotelistpart0 ; send the vote api calls
 	{
-	delegates := tovotelist%count%
+	delegates := tovotelistpart%a_index%
 	data = {"secret":"%passphrase%", %secdata% "publicKey":"%voterpubkey%", "delegates":[%delegates%]}
 	
+	
+;clipboard :=  tovotelist0 "`n" tovotelist%a_index%_names "`n`n" data
+;msgbox % clipboard
+
 	
 	oHTTP.Open("PUT", node "/api/accounts/delegates", false)
 	oHTTP.setRequestHeader("Content-Type", "application/json")
@@ -850,7 +867,9 @@ secdata:=""
 	responsetext := oHTTP.ResponseText
 	
 	newline := "Server response: " responsetext
-	
+	stringreplace nopassdata, data, %passphrase%,secretpassphrase
+	stringreplace nopassdata, nopassdata, %secondpassphrase%,secretpassphrase2
+	FileAppend voterequest: %nopassdata%`n%newline%`n,voteresponse.log	
 	
 	Ifinstring responsetext, "success":true
 		{
