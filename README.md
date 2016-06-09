@@ -6,6 +6,8 @@ This is an Autohotkey script for voting Lisk Delegates.
 You can find Autohotkey here: https://autohotkey.com/
 
 Changelog
+v0.2.6
+    - wait for new block before sending second voting transaction
 v0.2.5 
 	- Changed input fields behavior to improve reliability
 	- To prevent accidental selections, row checkbox selection now works with right click instead of left click
