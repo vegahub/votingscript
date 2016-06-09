@@ -2,6 +2,8 @@
 
 /*
 Changelog
+v0.2.6
+    - wait for new block before sending second voting transaction
 v0.2.5 
 	- Changed input fields behavior to improve reliability
 	- To prevent accidental selections, row checkbox selection now works with right click instead of left click
@@ -881,6 +883,7 @@ secdata:=""
 		newline := "Account " count " Error: " RegExReplace(responsetext,".*error"":""(.*?)"".*","$1")
 		
 	gosub updatestatus	
+	sleep 12000
 	}
 	
 }
