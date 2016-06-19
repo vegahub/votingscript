@@ -2,6 +2,8 @@
 
 /*
 Changelog
+v0.2.7
+    - bugfixes
 v0.2.6
     - wait for new block before sending second voting transaction
 v0.2.5 
