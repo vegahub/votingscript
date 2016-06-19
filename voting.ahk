@@ -3,8 +3,12 @@
 /*
 Changelog
 v0.2.7
+<<<<<<< HEAD
 	- bugfixes
 	
+=======
+    - bugfixes
+>>>>>>> origin/master
 v0.2.6
     - wait for new block before sending second voting transaction
 v0.2.5 
