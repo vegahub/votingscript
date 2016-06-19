@@ -2,6 +2,9 @@
 
 /*
 Changelog
+v0.2.7
+	- bugfixes
+	
 v0.2.6
     - wait for new block before sending second voting transaction
 v0.2.5 
@@ -887,11 +890,7 @@ secdata:=""
 		if voteprefix = -
 			newline := "Account " count " successfully unvoted " tovotecount%count% " delegate(s)"
 		}
-	Ifinstring responsetext, "error"
-		{
-		clipboard := data "`n`n`n" voted_1
-			msgbox % responsetext "`n" voteraddress_1
-		}
+
 	Ifinstring responsetext, "error"
 		newline := "Account " count " Error: " RegExReplace(responsetext,".*error"":""(.*?)"".*","$1")
 		
