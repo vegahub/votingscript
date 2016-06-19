@@ -765,7 +765,7 @@ RowNumber:=0
 loop 5 
 	{
 	voted_%a_index% := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/accounts/delegates/?address=" voteraddress_%a_index%)))
-	tovotelist%a_index% :="", novotecount%a_index%:="",tovotecount%a_index%:=""	
+	tovotelist%a_index% :="", novotecount%a_index%:="",tovotecount%a_index%:=0
 	}
 	
 Loop		; get selected rows from lisview 
@@ -796,13 +796,22 @@ Loop		; get selected rows from lisview
 		
 	if !tovote
 		continue
-		
+	
+	if (voteprefix = "+" AND InStr(voted_%a_index%, publickey)) 
+		continue
+
+	if (voteprefix = "-" AND !InStr(voted_%a_index%, publickey)) 
+		continue
+
+	ifinstring tovotelist%a_index%, %tovote%
+		continue
+	
 	if tovotelist%a_index%
-		if tovotecount%a_index% = 33		; bulk vote maximum allowed
+		if tovotecount%a_index% >= 33		; bulk vote maximum allowed
 			tovotelist%a_index% .= "|", tovotecount%a_index% := 0
 	else	
 		tovotelist%a_index% .= ","
-		
+	
 	tovotelist%a_index% .= tovote
 	tovotelist%a_index%_names .= un "`n"
 
@@ -861,7 +870,6 @@ secdata:=""
 	
 ;clipboard :=  tovotelist0 "`n" tovotelist%a_index%_names "`n`n" data
 ;msgbox % clipboard
-
 	
 	oHTTP.Open("PUT", node "/api/accounts/delegates", false)
 	oHTTP.setRequestHeader("Content-Type", "application/json")
@@ -880,17 +888,22 @@ secdata:=""
 			newline := "Account " count " successfully unvoted " tovotecount%count% " delegate(s)"
 		}
 	Ifinstring responsetext, "error"
+		{
+		clipboard := data "`n`n`n" voted_1
+			msgbox % responsetext "`n" voteraddress_1
+		}
+	Ifinstring responsetext, "error"
 		newline := "Account " count " Error: " RegExReplace(responsetext,".*error"":""(.*?)"".*","$1")
 		
 	gosub updatestatus	
-	sleep 12000
+	newline := "Waiting 15 secs for Lisk to process new votes"
+	gosub updatestatus			
+	sleep 15000
+
 	}
 	
 }
-newline := "Waiting 15 secs for Lisk to process new votes"
-gosub updatestatus	
 
-sleep 15000					; wait 15 seconds
 gosub startcheck			; update delegate info
 return
 
