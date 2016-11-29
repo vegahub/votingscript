@@ -71,7 +71,6 @@ tharude
 theredhawk
 thrice.pi_prometheus
 traderbill
-vega
 vi1son
 vipertkd
 vrlc92
