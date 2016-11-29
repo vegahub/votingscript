@@ -42,9 +42,9 @@ idealisk
 lamar
 litcoincollector
 liskgate
-lisknode
 malreynolds
 metal494_new
+bitseed
 mrfrismint
 mrv
 nerigal
@@ -86,5 +86,3 @@ fixcrypt
 kushed.delegate
 tembo
 iii.element.iii
-isabella
-joel
