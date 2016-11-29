@@ -4,11 +4,8 @@
 // I'll keep this list as up to date as I can.
 
 vega
-amanai
-arisalexis
 atreides
 axente
-bacobob
 bangomatic
 bioly
 cannabananadelegate
@@ -17,14 +14,12 @@ cointrader83
 corsaro
 crodam
 cad789
-cryptobase
 cryptostorms
 lisknode
 dafricash
 daoist
 densmirnov
 devasive
-digitalcurrencyltd
 digitron
 diplo
 distro
@@ -32,9 +27,7 @@ djselery
 eastwind_ja
 eclipsun
 forrest
-freddag
 freemind
-freeze
 freiheitswelle
 goldeneye
 gordo
@@ -49,9 +42,9 @@ idealisk
 lamar
 litcoincollector
 liskgate
+lisknode
 malreynolds
 metal494_new
-bitseed
 mrfrismint
 mrv
 nerigal
@@ -61,7 +54,6 @@ ondin
 ottobene
 popcornbag
 ppan
-proto
 punkrock
 qbanow
 redsn0w
@@ -79,6 +71,7 @@ tharude
 theredhawk
 thrice.pi_prometheus
 traderbill
+vega
 vi1son
 vipertkd
 vrlc92
@@ -91,3 +84,8 @@ movecrypto
 doweig
 phoenix1969
 fixcrypt
+kushed.delegate
+tembo
+iii.element.iii
+isabella
+joel
