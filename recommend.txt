@@ -12,7 +12,6 @@ bangomatic
 bioly
 bitseed
 cannabananadelegate
-carolina
 cc001
 cointrader83
 corsaro
@@ -32,7 +31,6 @@ eastwind_ja
 eclipsun
 fixcrypt
 forrest
-freemind
 freiheitswelle
 goldeneye
 gordo
@@ -66,7 +64,6 @@ popcornbag
 punkrock
 qbanow
 redsn0w
-redux
 rmelo
 samuray
 sgdias
@@ -78,7 +75,6 @@ stoner19
 techbytes
 tembo
 tharude
-theredhawk
 thrice.pi_prometheus
 traderbill
 vi1son
