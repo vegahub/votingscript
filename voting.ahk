@@ -1,916 +1,723 @@
-﻿;### some initialisation ###
+﻿/*
+Lisk Voting Tool for Windows by Vega
+Written in Autohotkey
 
-/*
-Changelog
-v0.2.7
-<<<<<<< HEAD
-	- bugfixes
-	
-=======
-    - bugfixes
->>>>>>> origin/master
-v0.2.6
-    - wait for new block before sending second voting transaction
-v0.2.5 
-	- Changed input fields behavior to improve reliability
-	- To prevent accidental selections, row checkbox selection now works with right click instead of left click
-	- copy selected rows from delegate list with CTRL+C (rank,username,address) 
-	- Button to get my recommended delegate list
-	- some small improvements
+v1.0
+
+Previous versions can be found here: https://github.com/vegahub/votingtool
+
+This script uses jQuery and Tablesorter (https://mottie.github.io/tablesorter/)
+
+todo:
+- allow saving setting without saving passhprases
+- allow saving only the first passhprase and asking for the second one when voting
+- vote for all displayed (filtered) delegates
+- design improvements
+- make nicer tooltips
+- add some tooltips with help info
 */
+
+
+;### some initialisation ###
 
 #SingleInstance force
 #Persistent
 #NoEnv
 SetBatchLines -1
 SetTitleMatchMode 2
-#InstallKeybdHook
 ComObjError(false)
 FileEncoding UTF-8
 Menu, tray, icon, shell32.dll, 145
 GroupAdd justthiswin, %A_ScriptName% - Notepad	; for editing purposes
 
-WinHttpReq:=ComObjCreate("WinHttp.WinHttpRequest.5.1")	
 oHTTP := ComObjCreate("WinHttp.WinHttpRequest.5.1")
 ;############# default settings ###########
-node := "https://login.lisk.io"
-ini := SubStr(A_ScriptName, 1,-4) ".ini"
+
 
 ;############### read ini file ###############
-nodecount := 0
-loop, read, %ini%
-	{
-	RegExMatch(a_loopreadline,"^(.*?)=(.*?)$",d)
-	if !d
+ini := SubStr(A_ScriptName, 1,-4) ".ini"	
+ScriptName := SubStr(A_ScriptName, 1,-4)
+
+Fileread settings_file,%ini%
+loop, parse, settings_file, `n,`r
+{
+	regex = "(.*?)"="(.*)"
+	regexmatch(a_loopfield,regex,d)
+	if (!d or !d2)
 		continue
-	%d1% := d2
+	%d1% := Trim(d2)
+	
+	ifinstring d1, passp1
+		count_accounts++
+}
+
+if !nodeurl	; if custom url not set up
+	nodeurl := "https://login.lisk.io"	; use official node
+nodeurl := RegExReplace(nodeurl,"(.*)\/$","$1")		; remove / if present at the end of url
+
+gui, add, ActiveX, vui x0 w1400 h1000, Shell.Explorer	; create gui control
+ui.Navigate(a_scriptdir "/votingUI.html") 	; load html from file
+While ui.readyState != 4 || ui.busy ; wait for the page to load
+Sleep, 10
+
+;// necessary to accept enter and accelorator keys
+;http://msdn.microsoft.com/en-us/library/microsoft.visualstudio.ole.interop.ioleinplaceactiveobject(VS.80).aspx
+IOleInPlaceActiveObject_Interface:="{00000117-0000-0000-C000-000000000046}"
+pipa :=	ComObjQuery(ui, IOleInPlaceActiveObject_Interface)
+OnMessage(WM_KEYDOWN:=0x0100, "WM_KEYDOWN")
+OnMessage(WM_KEYUP:=0x0101, "WM_KEYDOWN")
+;##############
+
+; create a html table based on how many accounts the user have
+generatetable:
+account_cols:="",account_cols2 := ""
+loop % count_accounts {
+;account_cols .= "<th class='acc filter-parsed filter-select'>A" a_index "</th>`n"
+account_cols .= "<th class='acc filter-select'>A" a_index "</th>`n"
+account_cols2 .= "<td class='acc'></td>"
+}
+
+delegate_table = 
+(
+<thead>
+<tr class='header'>
+	<th class='rank'>Rank</th>
+	<th data-placeholder="Search Delegates" class='Delegate'>Delegate</th>
+	<th class="filter-select voted" data-placeholder="All" >Voters</th>
+	%account_cols%
+	<th class='approval'>Approval</th>	
+	<th class='productivity'>Prod</th>
+	<th class='forged'>Forged</th>
+	<th class='missed'>Missed</th>
+</tr>
+</thead>
+)
+
+Gui Margin , 10, 0		
+
+st:
+gui show,Autosize, Lisk Voting	; display GUI
+gosub accountinfo	; get account(s) info based on passhprases provided
+
+gosub getdelegatelist	; get list of delegates to be dispalyed
+
+loop % count_accounts		
+	{
+	accc := a_index
+	gosub getvotedlist		; check what delegate your account have voted for
 	}
 
-; create GUI
-Gui, Color, 74828F,1B1926
+; update tablesorter cache
+js = $("#delegates").trigger("updateAll");
+ui.document.parentwindow.execScript(js)
 
-gui, font,s10 cwhite bold, Verdana
-Gui, Add, GroupBox, x+1 y+1 w560 h200 0x300 0x8000 cDC8G86, Lisk Accounts Passphrases
-gui, font,s8 normal
-Gui, Add, Edit,xs+10 ys+25 w140 hWndhWndpass1 r1 vpass1 Password* gAccountinfo,%pass1%
-Gui, Add, Edit,w140 hWndhWndpass2 r1 vpass2 Password* gAccountinfo,%pass2%
-Gui, Add, Edit,w140 hWndhWndpass3 r1 vpass3 Password* gAccountinfo,%pass3%
-Gui, Add, Edit,w140 hWndhWndpass4 r1 vpass4 Password* gAccountinfo,%pass4%
-Gui, Add, Edit,w140 hWndhWndpass5 r1 vpass5 Password* gAccountinfo,%pass5%
+gosub countstuff	; get stats to display
+gosub Getvoterslist	; check who voted for your delegate
 
-Gui, Add, Edit,xs+150 ys+25 w140 hWndhWndpass1_2 r1 vpass1_2 Password* ,%pass1_2%
-Gui, Add, Edit,w140 hWndhWndpass2_2 r1 vpass2_2 Password* ,%pass2_2%
-Gui, Add, Edit,w140 hWndhWndpass3_2 r1 vpass3_2 Password* ,%pass3_2%
-Gui, Add, Edit,w140 hWndhWndpass4_2 r1 vpass4_2 Password* ,%pass4_2%
-Gui, Add, Edit,w140 hWndhWndpass5_2 r1 vpass5_2 Password* ,%pass5_2%
+settimer delegates_displayed, 500	; continously check filter changes
 
-SetEditPlaceholder(hWndpass1, "Account passphrase",1)
-SetEditPlaceholder(hWndpass2, "Account 2 passphrase",1)
-SetEditPlaceholder(hWndpass3, "Account 3 passphrase",1)
-SetEditPlaceholder(hWndpass4, "Account 4 passphrase",1)
-SetEditPlaceholder(hWndpass5, "Account 5 passphrase",1)
+doc := ui.document
+ComObjConnect(doc, "Doc_")	; watch for click on GUI
 
-SetEditPlaceholder(hWndpass1_2, "Second passphrase",1)
-SetEditPlaceholder(hWndpass2_2, "Second passphrase",1)
-SetEditPlaceholder(hWndpass3_2, "Second passphrase",1)
-SetEditPlaceholder(hWndpass4_2, "Second passphrase",1)
-SetEditPlaceholder(hWndpass5_2, "Second passphrase",1)
-gui, font,s8 bold
-Gui, Add, Text,xs+300 ys+20 r2 w240 HWNDaccount1
-Gui, Add, Text,y+4 w240 r2 HWNDaccount2
-Gui, Add, Text,y+4 w240 r2 HWNDaccount3
-Gui, Add, Text,y+3 w240 r2 HWNDaccount4
-Gui, Add, Text,y+3 w240 r2 HWNDaccount5
+return
 
-Gui, Add, Button,section -Theme gshowhide  x25 y+10 h15, Show passphrases
-Gui, Add, Button,ys -Theme gsavepass h15, Save passphrases
-Gui, Add, Button,ys -Theme gdeletepass h15, Delete saved passphrases
+return
 
-gui, font,s10, 
-Gui, Add, GroupBox, section x837 y1 w450 h200 0x300 0x8000 cDC8G86, Status Log
-gui, font,s8, 
-Gui, Add, Edit,xs+5 ys+20 w440 r12 -E0x200 ReadOnly HWNDstatuslog
+;#####################################################
+; trigger so ctrl+v would format a delegate list before pasting it in the search field
+#IfWinActive  Lisk Voting ahk_class AutoHotkeyGUI
+^v::
+Stringreplace list,clipboard,`r`n,`n,all
+Stringreplace list,list,`n,|,all
+js = $.tablesorter.setFilters( $('#delegates'), [ '', '%list%'] );
+if (ui.document.activeElement.id = "search")
+	ui.document.parentwindow.execScript(js)
+else 
+	sendinput %clipboard%
+return
 
-gui, font,s10, 
-Gui,Add, GroupBox, section x580 y155 w250 0x300 0x8000 cDC8G86 h50,Node (URL with https and port)
-gui, font,s8, 
-Gui,Add, Edit, xs+10 ys+20 -E0x200 w230 vnode gnodecheck, %node%
-
-Gui,Add,Edit,w195 x15 y280 h600 -E0x200 section hwndhwndVotinglist vVotinglist  gTransferlist,%votinglist%
-
-Gui Add, ListView, xp+197 y280 w1050 h600 -E0x200 -LV0x10 Checked AltSubmit glistview, Votefor|#|Rank|Username|Lisk Address|Voted|Voted2|Voted3|Voted4|Voted5|Voted you|Approval|Blocks|Missed Blocks|Productivity|pubkey
-
-LV_ModifyCol(1, "Right"), LV_ModifyCol(2, "Integer"), LV_ModifyCol(3,  "Integer"), LV_ModifyCol(12, "Integer"), LV_ModifyCol(13, "Integer"),LV_ModifyCol(14, "Integer"),LV_ModifyCol(15, "Integer 90"), LV_ModifyCol(16, 0),LV_ModifyCol(7, 0),LV_ModifyCol(8, 0),LV_ModifyCol(9, 0),LV_ModifyCol(10, 0),LV_ModifyCol(11, 0)
-
-gui, font,s10, 
-Gui, Add, GroupBox, x15 y210 w195 h670 0x300 0x8000 cDC8G86, Delegate Filter
-Gui, Add, GroupBox, x210 y210 w1052 h670 0x300 0x8000 cDC8G86, Delegate List
-gui, font,s8, 
-Gui, Add, Button, x20 y228 -Theme ggetlist h15, Recommended Delegates
-Gui, Add, Button, x40 y245 -Theme gloadlist h15, &Load list
-Gui, Add, Button, x+5 yp -Theme gSavelist h15, &Save list
-Gui, Add, Button, x65 yp+18 -Theme gClearlist h15, &Clear filter
-
-Gui, Add, Button, x220 y232 -Theme h15 gselectall, Select All
-Gui, Add, Button, xp yp+23 -Theme h15 gunselectall, Unselect All
-
-Gui, Add, Button, x+10 y233 -Theme h15 gtransferlist, Display all delegates
-Gui, Add, Button, xp yp+22 -Theme h15 gupdateinfo, Update Table
-Gui, Add, Button, x+100 y240 -Theme gvote_unvote, Vote Selected
-Gui, Add, Button, x+25 yp -Theme gvote_unvote, Unvote Selected
-Gui, Add, Button,  x+25 yp -Theme gstartcheck, Update All Data
-
-
-gui, font,s10, 
-Gui, Add, GroupBox, section x580 y1 w250 h150 0x300 0x8000 cDC8G86, Info
-gui, font,s8, 
-Gui, Add, Text,ys+18 xs+5 w240 r1 HWNDinfo1,
-Gui, Add, Text,yp+13 w240 r1 HWNDinfo2,
-Gui, Add, Text,yp+13 w240 r1 HWNDinfo3,
-Gui, Add, Text,yp+25 w240 r1 HWNDinfo4,
-Gui, Add, Text,yp+13 w240 r1 HWNDinfo5,
-Gui, Add, Text,yp+13 w240 r1 HWNDinfo6,
-Gui, Add, Text,yp+13 w240 r1 HWNDinfo7,
-Gui, Add, Text,yp+13 w240 r1 HWNDinfo8,
-Gui, Add, Text,yp+13 w240 r1 HWNDinfo9,
-
-
-Gui Show, w1300 h900 Center,Lisk Delegate Voting
-;Gui Show, w1300 h900 x650,Lisk Delegate Voting
-ControlFocus , , Lisk Delegate Voting
-
-OnMessage(0x200, "WM_MOUSEMOVE")
-
-GroupAdd Self, % "ahk_pid " DllCall("GetCurrentProcessId") ; Create an ahk_group "Self" and make all the current process's windows get into that group.
-
-startcheck:
-If node
-	gosub nodecheck_enter
-	
-If pass1
-	gosub Accountinfo_enter
-
-updateinfo:
-if statuscheck = true
-	gosub getdelegatelist	
-
-gosub getvotedlist
-	
-gosub transferlist_enter
-	
+;#####################################################
+; check who voted for your delegate
+Getvoterslist:
+if !delegatename
 	return
+; API call
+delegate_publickey := regexreplace(oHTTP.ResponseText(oHTTP.Send(oHTTP.Open("GET", nodeurl "/api/delegates/get?username=" delegatename))),".*publicKey"":""(.*?)"",.*","$1")
 
-;############ tooltip helper #######
+Ifinstring delegate_publickey, Account not found
+	return
+	
+response := oHTTP.ResponseText(oHTTP.Send(oHTTP.Open("GET", nodeurl "/api/delegates/voters?publicKey=" delegate_publickey)))
 
-
-WM_MOUSEMOVE()
-{
-    static CurrControl, PrevControl, _TT  ; _TT is kept blank for use by the ToolTip command below.
-	if A_GuiControl not in Recommended Delegates,votinglist
-		{
-		Tooltip
-		return
-		}
+;process and display list
+loop % ui.document.getElementById("delegates").rows.length	
+	{
+	del_add := ui.document.getElementById("delegates").rows[a_index].getAttribute("address")
+	if !del_add 
+		continue
 		
-	
-	if A_GuiControl = Recommended Delegates
-		Tooltip Delegates I (Vega) personally recommend you give your vote for.`nThe list is up to date`, downloaded from GitHub
-	if A_GuiControl = votinglist
-		Tooltip Type (or paste a list of) delegate names`, or `naddresses here to filter the full delegate list
+			
+			
+	IfinString response, %del_add%
+		ui.document.getElementById("delegates").rows[a_index].cells[2].innerhtml := "✔", ui.document.getElementById("delegates").rows[a_index].cells[2].style.color := "green", ui.document.getElementById("delegates").rows[a_index].cells[2].title := "Voted"
 		
-	return	
-}
-
-	
-;######## BUTTON actions #########	
-getlist:
-url := "https://raw.githubusercontent.com/vegahub/votingscript/master/recommend.txt"
-newline := "Getting a fresh list of recommended delegates from GitHub"
-gosub updatestatus
-UrlDownloadToFile, %URL%, recommend_list.txt
-
-recommend_list:=""
-loop, read, recommend_list.txt
-	{
-	Ifinstring a_loopreadline, //
-		continue
-	if !a_loopreadline
-		continue
-	recommend_list .= a_loopreadline "`n"	
-	}
-
-if !recommend_list
-	return
-GuiControl,, edit13, %recommend_list%
-sleep 20
-gosub transferlist_enter
-return
-
-loadlist:
-Ifexist votinglist.txt
-	FileRead votinglist, votinglist.txt
-if !votinglist	
-	return
-GuiControl,, edit13, %votinglist%
-gosub transferlist_enter
-return
-
-Clearlist:
-gui submit,NoHide
-GuiControl,, edit13,
-If !votinglist
-	return
-gosub transferlist_enter
-return
-
-Savelist:
-FileDelete votinglist.txt
-FileAppend %votinglist%, votinglist.txt
-newline := "Voting list was saved to votinglist.txt"
-gosub updatestatus
-Return
-
-selectall:
-loop % LV_GetCount()	
-{
-SendMessage, 4140, a_index - 1, 0xF000, SysListView321  ; 4140 is LVM_GETITEMSTATE.  0xF000 is LVIS_STATEIMAGEMASK.
-IsChecked := (ErrorLevel >> 12) - 1  ; This sets IsChecked to true if RowNumber is checked or false otherwise.
-If IsChecked = 0
-	LV_Modify(a_index, "+Check")
-if a_index = 101		; don't select more than max vote number
-		break
-}
-checkedrow := LV_GetCount()
-GuiControl,, % info3 ,% "Delegates Selected: " checkedrow
-return
-
-unselectall:
-loop % LV_GetCount()	
-{
-SendMessage, 4140, a_index - 1, 0xF000, SysListView321  ; 4140 is LVM_GETITEMSTATE.  0xF000 is LVIS_STATEIMAGEMASK.
-IsChecked := (ErrorLevel >> 12) - 1  ; This sets IsChecked to true if RowNumber is checked or false otherwise.
-If IsChecked = 1
-	LV_Modify(a_index, "-Check")
-}
-checkedrow := "0"
-GuiControl,, % info3 ,% "Delegates Selected: " checkedrow
-Return 
-
-listview:	; check/uncheck rows checkbox on click
-;msgbox % A_GuiControl "`n" A_GuiEvent
-;https://autohotkey.com/docs/commands/ListView.htm#G-Label_Notifications_Secondary
-rownum := A_EventInfo
-;if !InStr(ErrorLevel, "S", true)	; row selected
-;	Return
-SendMessage, 4140, rownum - 1, 0xF000, SysListView321  ; 4140 is LVM_GETITEMSTATE.  0xF000 is LVIS_STATEIMAGEMASK.
-IsChecked := (ErrorLevel >> 12) - 1  ; This sets IsChecked to true if RowNumber is checked or false otherwise.	
-
-if (IsChecked = "1" AND A_GuiEvent = "Rightclick")
-	{
-	LV_Modify(rownum, "-Check")
-	checkedrow--
-	}
-if (IsChecked != "1" AND A_GuiEvent = "Rightclick")
-	{
-	LV_Modify(rownum, "+Check")
-	checkedrow++
-	}
-GuiControl,, % info3 ,% "Delegates Selected: " checkedrow
-return
-
-showhide:
-gui submit,nohide
-
-if A_GuiControl = Show passphrases
-	{
-	GuiControl,, %A_GuiControl%,Hide passphrases
-	loop 5 {
-		GuiControl, -Password +redraw, % hWndpass%a_index%
-		GuiControl, -Password +redraw, % hWndpass%a_index%_2
-		}
-	
-	}
-else
-	{
-	GuiControl,, %A_GuiControl%,Show passphrases
-	loop 5 {
-		GuiControl, +Password +redraw, % hWndpass%a_index%
-		GuiControl, +Password +redraw, % hWndpass%a_index%_2
-		}
-}		
-return
-
-savepass:
-passvar := ""
-loop 5 {
-	passprim := pass%a_index%, passsec := pass%a_index%_2
-	if passprim
-		IniWrite, %passprim%, %ini%, Passphrases,pass%a_index%
-	if passsec	
-		IniWrite, %passsec%, %ini%, Passphrases,pass%a_index%_2
-}
-newline := "Passphrased are saved to settings"
-gosub updatestatus
-return
-
-deletepass:
-IniDelete, %ini%, Passphrases
-newline := "Passphrased are deleted from settings"
-gosub updatestatus
-return
-
-updatestatus:
-FormatTime, nowtime,,HH:mm:ss - 
-guicontrolget, statlog,, % statuslog
-GuiControl,, %statuslog%,%nowtime% %newline%`n%statlog%
-Return
-
-;###########################
-GuiClose:
-ExitApp
-
-
-
-;######## get account info based on passphrase ##########
-Accountinfo:
-GuiControlGet, controlcalled, FocusV
-GuiControlGet, controlcalled2, FocusV
-while (controlcalled = controlcalled2)
-	{
-	sleep 50
-	GuiControlGet, controlcalled2, FocusV
-	if a_index = 3000	; so it wont hung
-		break
-	}
-
-Accountinfo_enter:
-accountcount:=0
-Gui, submit,nohide	
-
-if !notsecureok
-	ifinstring node, http:// 
-	MsgBox , 260, Unencrypted connection to Node, The Node URL you provided has no "https" in it.`nThe tool needs to send your passphrase(s) to your node as POST data.`nSending you passphrase(s) through an unencrypted connection is a security risk.`n`nDo you want to continue anyway?
-	IfMsgBox No
-		{
-		newline := "Please provide a secure Node URL"
-		gosub updatestatus
-		notsecureok := 1
-		return
-		}
-
-	notsecureok := 1
-
-
-loop 5 {
-	if (A_GuiControl AND if !InStr(A_GuiControl, " "))			; called by a specific field being edited
-		passphrase := %A_GuiControl%, c := SubStr(A_GuiControl, 0), controlname := account%c% 
 	else
-		c := a_index, passphrase := pass%a_index%, controlname := account%c%
+		ui.document.getElementById("delegates").rows[a_index].cells[2].innerhtml := "✘", ui.document.getElementById("delegates").rows[a_index].cells[2].style.color := "red", ui.document.getElementById("delegates").rows[a_index].cells[2].title := "Not voted"
+	}
 
-	if !passphrase 
+return
+
+
+settingshtml:
+;fill the fields for the html if there is already settings saved
+; deobfuscate passphrases before displaying
+ui.document.getElementById("settings_nodeurl").value := nodeurl
+ui.document.getElementById("settings_delegatename").value := delegatename
+if (savetofilestatus = "-1")
+	ui.document.getElementById("savepass").checked := true
+
+loop 8 {
+
+	ui.document.getElementsByClassName("settings_firstpass")[a_index - 1].value := CodeG(passp1_%a_index%,-1,"whatever")
+	ui.document.getElementsByClassName("settings_secondpass")[a_index - 1].value := CodeG(passp2_%a_index%,-1,"whatever")
+}
+
+ui.document.getElementById("editpass").style.display := "block"	
+return
+
+settingsclose:
+count_accounts:=""
+ui.document.getElementById("editpass").style.display := "none"
+nodeurl := ui.document.getElementById("settings_nodeurl").value
+delegatename := ui.document.getElementById("settings_delegatename").value
+savetofilestatus := ui.document.getElementById("savepass").checked
+
+settingstosave := ""
+
+settingstosave .= """nodeurl""=""" ui.document.getElementById("settings_nodeurl").value """`n"
+settingstosave .= """delegatename""=""" ui.document.getElementById("settings_delegatename").value """`n"
+settingstosave .= """savetofilestatus""=""" ui.document.getElementById("savepass").checked """`n"
+
+	loop 8
 		{
-		GuiControl,,%controlname%
-		continue
-		}
-		
-accountcount++	
+	passp1_%a_index% := CodeG(ui.document.getElementsByClassName("settings_firstpass")[a_index - 1].value,1,"whatever"), passp2_%a_index% := CodeG(ui.document.getElementsByClassName("settings_secondpass")[a_index - 1].value,1,"whatever")		
+	
+	settingstosave .= """passp1_" a_index """=""" CodeG(ui.document.getElementsByClassName("settings_firstpass")[a_index - 1].value,1,"whatever") """`n""passp2_" a_index """=""" CodeG(ui.document.getElementsByClassName("settings_secondpass")[a_index - 1].value,1,"whatever") """`n", ui.document.getElementsByClassName("settings_firstpass")[a_index - 1].value, ui.document.getElementsByClassName("settings_secondpass")[a_index - 1].value := ""
+	
+	if passp1_%a_index%
+	count_accounts++
+	}
 
-	newline := "Getting Account info for passphrase " c
-	gosub updatestatus
-	oHTTP.Open("POST", node "/api/accounts/open" , False)	;Post request
+if !settingstosave
+	return
+
+	
+If (settings_file = settingstosave)
+	return
+
+	; get save passwords status and
+if (ui.document.getElementById("savepass").checked = "-1")
+	{
+	FileDelete %ini%
+	FileAppend %settingstosave%,%ini%		
+	}
+
+
+gosub generatetable
+;reload
+return
+
+
+;######## get account informations based on passhprases provided ####
+accountinfo:
+info_html := ""
+
+select := "<select id='affected_accounts' name='affected_accounts'><option value='All'>Mark all accounts</option>"
+loop % count_accounts 
+		select .= "<option value='" a_index "'>Mark account " a_index "</option>`n"
+select .= "</select>"
+  
+filters_div = 
+(
+<input type=text class="search selectable" placeholder="Search" data-column="1" id="search">
+<select id='selectfilter' class="change-input">
+  <option value="1">Delegate name</option>
+  <option value="0">Rank</option>
+  <option value="all">Everything</option> 
+  <option value="5">Approval</option>
+  <option value="6">Productivity</option>
+</select>
+<div class='dropdown'> <button class='dropbtn'>Show Only</button>  <div class='dropdown-content'>    <a href='#'>Load list 1</a>    <a href='#'>Load list 2</a>  <a href='#'>Recommended list</a></div></div>
+<div class='dropdown'> <button class='dropbtn'>Save Current List</button>  <div class='dropdown-content'>    <a href='#'>Save as list 1</a>    <a href='#'>Save as list 2</a></div></div>
+<button type="button" class="dropbtn">Reset Filter</button>
+<br><hr>
+)
+
+buttons =
+(
+<div class='dropdown'> <button class='dropbtn'>Clone A1 marks to all accounts</button>  <div class='dropdown-content'>  </div></div>  
+<div class='dropdown'> <button class='dropbtn' title='Reload all data. Recheck accounts and vote statuses again.'>Reload All Data</button>  <div class='dropdown-content'>  </div></div>  
+)
+	 
+ui.document.getElementById("filters").innerhtml  := "<legend>Filter and Action Buttons</legend>" filters_div buttons
+
+
+js = $.tablesorter.filter.bindSearch( $('#delegates'), $('.search') );
+ui.document.parentwindow.execScript(js)
+js = $('select').change(function(){ $('.selectable').attr( 'data-column', $(this).val()  );     $.tablesorter.filter.bindSearch( $('#delegates'), $('.search'), false );  $('#delegates').trigger('filterReset'); }); 
+ui.document.parentwindow.execScript(js)
+
+; create html table to display data
+ui.document.getElementById("basicinfo").innerhtml := "<button class='dropbtn' type='button' id='Settings_button'>Settings</button><div class='rTableRow'>		<div class='rTableHead' style='width:125px;' >Delegates displayed</div><div class='rTableCell' id='info_visible'></div></div><div class='rTableRow'>		<div class='rTableHead' style='width:125px;'>Your delegate name</div><div class='rTableCell' id='delname'>" delegatename "</div></div><div class='rTableRow' >		<div class='rTableHead' style='width:125px;' id='nodeurl'>Node URL</div><div class='rTableCell'>" nodeurl "</div> 	</div><div class='rTableRow'>&nbsp;</div>"
+
+ui.document.getElementById("info_rTbody").innerhtml  := ""
+loop % count_accounts {
+
+	if !passp1_%a_index% 
+		continue
+
+	oHTTP.Open("POST", nodeurl "/api/accounts/open" , False)	;Post request
 	oHTTP.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded") 
-	oHTTP.Send("secret=" passphrase)	;Send POST request
+	oHTTP.Send("secret=" CodeG(passp1_%a_index%,-1,"whatever"))	;Send POST request
 	voterinfo := oHTTP.ResponseText
 
 	regexmatch(voterinfo,"i){""success"":true,""account"":{""address"":""(.*?)"",""unconfirmedBalance"":""(.*?)"",""balance"":""(.*?)"",""publicKey"":""(.*?)"",""unconfirmedSignature"":.,""secondSignature"":(.*?),""secondPublicKey"":(.*?),""multisignatures"":(.*?),""u_multisignatures"":(.*?)}}",d)	
-
-	if d
-		{
-		voteraddress_%c% := d1, unconfirmedbalance_%c% := d2 / 100000000, balance_%c% := round(d3 / 100000000,2),voterpubkey_%c% := d4,secondsig_%c% := d5,secondpubkey_%c% := d6
-		if secondsig_%c% != 0
-			SetEditPlaceholder(hWndpass%c%_2, "Needs second pass!",1)
-		Else
-			SetEditPlaceholder(hWndpass%c%_2, "No second pass needed",1)
-
-		GuiControl,,%controlname%,% "Address: " voteraddress_%c% "`nBalance: " balance_%c% " Lisk"
-		}
-	
 	if !d
-		{
-		GuiControl,,%controlname%
-		newline := "Couldn't get account info from """ node """"
-		gosub updatestatus
-		return
-		}
-
-		
-	;if A_GuiControl			; if specific field called it, break the loop
-	;	break
-
-}
-if A_GuiEvent = Normal
-	gosub getvotedlist
-return
-
-
-
-#IfWinActive ahk_group Self
-~enter::			; so enter saves changes in input fields
-~NumpadEnter::
-~Tab::
-GuiControlGet, controlcalled, FocusV
-
-if controlcalled not in node,pass1,pass2,pass3,pass4,pass5,pass1_2,pass2_2,pass3_2,pass4_2,pass5_2,votinglist
-	return
-
-If (controlcalled = "votinglist")	
-	goto transferlist_enter
-	
-ControlFocus ,,
-
-If (controlcalled = "node")
-	goto nodecheck_enter
-
-If controlcalled in pass1,pass2,pass3,pass4,pass5,pass1_2,pass2_2,pass3_2,pass4_2,pass5_2
-	goto Accountinfo_enter
-return
-
-; copy selected rows to clipboard
-~^c::
-GuiControlGet, controlcalled, Focus
-If controlcalled != sysListView321
-	return
-
-sellist:="",rowNumber := 0,rowcount:=0
-Loop
-{
-    RowNumber := LV_GetNext(RowNumber)  ; Resume the search at the row after that found by the previous iteration.
-    if not RowNumber  ; The above returned zero, so there are no more selected rows.
-        break
-		
-	row:=""
-	loop % LV_GetCount("Column") 
-		{
-		if a_index in 3,4,5
-			{
-			LV_GetText(x, RowNumber,a_index)
-			If x
-				row .= x a_tab
-			}	
-		}
-		
-	sellist .= row "`n"	
-	rowcount++
-}
-
-newline := rowcount " delegates info was copied to the clipboard"
-gosub updatestatus
-return
-
-
-;#### check if provided node url is working (send sync api call)
-nodecheck:
-GuiControlGet, controlcalled, FocusV
-
-
-while (controlcalled = "node")
-	{
-	sleep 50
-	GuiControlGet, controlcalled, FocusV
-	if a_index = 3000	; so it wont hung
-		break
-	}
-
-nodecheck_enter:
-Gui, submit,nohide	
-	
-if SubStr(node, 0) = "/"
-	node := SubStr(node, 1,-1)
-
-newline := "Checking """ node """"
-gosub updatestatus
-
-url := node "/api/loader/status/sync"
-statuscheck := RegExReplace(WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",url))),"{""success"":(.*?),""syncing"":(.*?),""blocks"":(.*?),""height"":(.*?)}","$1")
-
-; TODO - if syncing, then .....
-If statuscheck = true
-	newline := "Node is ready to go"
-else 
-	newline := "No response from Node!"
-
-if (node_old AND node != node_old)
-	{
-	IniWrite, %node%, %ini%, General,Node
-	node_old := node
-	gosub startcheck
-	}
-node_old := node
-gosub updatestatus
-return
-
-
-;##### parse delegate list (or filtered list) and display in table. check for votes) ##
-transferlist:
-
-GuiControlGet, controlcalled, FocusV
-
-while (controlcalled = "votinglist")
-	{
-	sleep 50
-	GuiControlGet, controlcalled, FocusV
-	if a_index = 3000	; so it wont hung
-		break
-	}
-
-transferlist_enter:
-Gui, submit,nohide
-
-rowcount:="0"	
-LV_Delete()
-
-LV_ModifyCol(16, 0),LV_ModifyCol(7, 0),LV_ModifyCol(8, 0),LV_ModifyCol(9, 0),LV_ModifyCol(10, 0),LV_ModifyCol(11, 0)
-
-If A_GuiControl = Display All Delegates
-	{
-	GuiControl, , %A_GuiControl%,Display Filtered List
-	votinglist := ""
-	}
-else
-If A_GuiControl = Display Filtered List
-	{
-	GuiControl, , %A_GuiControl%,Display All Delegates
-	Gui, submit,nohide
-	}
-If !votinglist
-	{
-	newline := "Displaying complete delegate list"
-
-	gosub updatestatus
-	
-	loop, parse, delegate_list, {
-		{
-		regexmatch(a_loopfield,"""username"":""(?<username>.*?)"",""address"":""(?<address>.*?)"",""publicKey"":""(?<publickey>.*?)"",""vote"":""(?<vote>.*?)"",""producedblocks"":""?(?<producedblocks>.*?)""?,""missedblocks"":""?(?<missedblocks>.*?)""?,""rate"":(?<rate>.*?),""approval"":""?(?<approval>.*?)""?,""productivity"":""?(?<productivity>.*?)""?}",delegate_)
-
-		if !delegate_
-			continue
-		
-		loop 5 {
-		if !voteraddress_%a_index%
-			continue
-		votedfor%a_index% := "NO"
-		ifinstring voted_%a_index%, %delegate_address%	; ignore account you already voted for
-			votedfor%a_index% := "YES"
-			
-		}	
-	
-		rowcount++		
-		;  get who voted for this delegate
-		if rowcount = 1		; get list only once
-			votes := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/delegates/voters?publicKey=" voterpubkey_1)))
-
-	
-		votedback := "NO"		
-		Ifinstring votes, %delegate_address%
-			votedback := "YES"
-		
-		if !isdelegate_1		; voter is not delegate, don't display voteback
-			votedback := ""		
-		Else	
-			{
-			votedback := "NO"		
-			Ifinstring votes, %delegate_address%
-				votedback := "YES"
-			}
-		LV_Insert(rowcount,"","",rowcount,delegate_rate,delegate_username,delegate_address,votedfor1,votedfor2,votedfor3,votedfor4,votedfor5,votedback,delegate_approval,delegate_producedblocks,delegate_missedblocks,delegate_productivity,delegate_publickey)
-
-		
-	;	if ((votedfor1 = "NO" OR votedfor2 = "NO" OR votedfor3 = "NO" OR votedfor4 = "NO" OR votedfor5 = "NO") AND delegate_rate)
-		;if delegate_username = Vega				; little bit of self interest
-		;	LV_Modify(rowcount, "+Check")			; never hurt anyone
-		
-		}
-		
-
-	}
-
-checkedrow:="0"
-newline := "Displaying filtered delegate list"
-loop, parse, votinglist, `n,`r
-	{
-	if (a_index = "1" and A_GuiControl != "votinglist")		; just some typing
-		gosub updatestatus
-	if !a_loopfield
 		continue
-	; determine if username,address,pubkey
-	line := a_loopfield	
-	delegate_username := "", delegate_address := "", delegate_publickey :=  "",delegate_vote := "",	delegate_producedblocks := "", delegate_missedblocks := "", delegate_rate := "", delegate_approval := "", delegate_productivity := ""
-	loop, parse, delegate_list, {
-		{
+	
+	voteraddress_%a_index% := d1, unconfirmedbalance_%a_index% := d2 / 100000000, balance_%a_index% := round(d3 / 100000000,2),voterpubkey_%a_index% := d4,secondsig_%a_index% := d5,secondpubkey_%a_index% := d6
+
+infobox := "<div class='rTableRow'><div class='rTableCell info_address' id='info_address" a_index "'>" voteraddress_%a_index% "</div>	<div class='rTableCell info_balance' id='info_balance" a_index "'>" balance_%a_index% " Lisk</div>		<div class='rTableCell info_votes' id='info_votes" a_index "'> ? </div> <div class='rTableCell info_tovotes' id='info_tovotes" a_index "'> ? </div>	<div class='rTableCell info_tounvotes' id='info_tounvotes" a_index "'> ? </div>	<div class='rTableCell info_totalvotes' id='info_totalvotes" a_index "'> ? </div></div>"
+
+
+ui.document.getElementById("info_rTbody").innerhtml .= infobox
+}
+
+
+return
 		
-		Ifnotinstring a_loopfield, "%line%"
+
+;#################################
+;######## BUTTON actions #########	
+;#################################
+
+; this gets called whenever a user click on the GUI
+Doc_OnClick(doc) {
+global ui, nodeurl, count_accounts
+If (doc.parentWindow.event.srcElement.id = "Settings_button")
+	gosub settingshtml
+	
+if (doc.parentWindow.event.srcElement.innerhtml = "Vote/Unvote!")
+	gosub vote_unvote
+	
+;msgbox % doc.parentWindow.event.srcElement.outerhtml	
+If (doc.parentWindow.event.srcElement.id = "Done_button")
+	gosub settingsclose
+address := doc.parentWindow.event.srcElement.getAttribute("address")
+If 	address
+	ifinstring nodeurl,testnet
+		run https://testnet-explorer.lisk.io/address/%address%
+	else
+		run https://explorer.lisk.io/address/%address%
+
+;############	filter buttons #############
+if (doc.parentWindow.event.srcElement.innerhtml = "Reload All Data")
+	gosub st
+
+if (doc.parentWindow.event.srcElement.innerhtml = "Load list 1")
+	{
+	FileRead list, list1.txt
+	Stringreplace list,list,`r`n,`n,all
+	Stringreplace list,list,`n,|,all
+	if !list
+		return
+	js = $.tablesorter.setFilters( $('#delegates'), [ '', '%list%'] );
+	ui.document.parentwindow.execScript(js)
+	doc.parentWindow.event.srcElement.innerhtml .= " - Loaded"
+	sleep 1000
+	doc.parentWindow.event.srcElement.innerhtml := "Load list 1"
+	return
+	}
+	
+if (doc.parentWindow.event.srcElement.innerhtml = "Load list 2")
+	{
+	FileRead list, list2.txt
+	Stringreplace list,list,`r`n,`n,all
+	Stringreplace list,list,`n,|,all
+	if !list
+		return
+	js = $.tablesorter.setFilters( $('#delegates'), [ '', '%list%'] );
+	ui.document.parentwindow.execScript(js)
+	doc.parentWindow.event.srcElement.innerhtml .= " - Loaded"
+	sleep 1000
+	doc.parentWindow.event.srcElement.innerhtml := "Load list 2"
+	return
+	}
+	
+if (doc.parentWindow.event.srcElement.innerhtml = "Recommended list")
+	{
+	url := "https://raw.githubusercontent.com/vegahub/votingscript/master/recommend.txt"
+	UrlDownloadToFile, %URL%, recommend_list.txt
+
+	list:=""
+	loop, read, recommend_list.txt
+		{
+		Ifinstring a_loopreadline, //
 			continue
-
-		regexmatch(a_loopfield,"""username"":""(?<username>.*?)"",""address"":""(?<address>.*?)"",""publicKey"":""(?<publickey>.*?)"",""vote"":""(?<vote>.*?)"",""producedblocks"":""?(?<producedblocks>.*?)""?,""missedblocks"":""?(?<missedblocks>.*?)""?,""rate"":(?<rate>.*?),""approval"":""?(?<approval>.*?)""?,""productivity"":""?(?<productivity>.*?)""?}",delegate_)
-		break
+		if !a_loopreadline
+			continue
+		if list
+			list .= "|"
+		list .= a_loopreadline
 		}
 
-	If !delegate_username 	
-		delegate_username := line, delegate_address := "NOT FOUND IN DELEGATE LIST"
+	if !list
+		return
 		
-		loop 5 {
-		if !voteraddress_%a_index%
-			continue		
-		votedfor%a_index% := "NO"
-		ifinstring voted_%a_index%, %delegate_address%	; ignore account you already voted for
-			votedfor%a_index% := "YES"
-		}	
+	js = $.tablesorter.setFilters( $('#delegates'), [ '', '%list%'] );
+	ui.document.parentwindow.execScript(js)
+	doc.parentWindow.event.srcElement.innerhtml .= " - Loaded"
+	sleep 1000
+	doc.parentWindow.event.srcElement.innerhtml := "Recommended List"
+	return
+	}
 
-				
-		rowcount++	
-		
-		;  get who voted for this delegate
-		if rowcount = 1		; get list only once
-			votes := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/delegates/voters?publicKey=" voterpubkey_1)))
-
-		if !isdelegate_1		; voter is not delegate, don't display voteback
-			votedback := ""		
-		Else	
-			{
-			votedback := "NO"		
-			Ifinstring votes, %delegate_address%
-				votedback := "YES"
-			}
-		LV_Insert(rowcount,"","",rowcount,delegate_rate,delegate_username,delegate_address,votedfor1,votedfor2,votedfor3,votedfor4,votedfor5,votedback,delegate_approval,delegate_producedblocks,delegate_missedblocks,delegate_productivity,delegate_publickey)
-
-	if ((votedfor1 = "NO" OR votedfor2 = "NO" OR votedfor3 = "NO" OR votedfor4 = "NO" OR votedfor5 = "NO") AND delegate_rate)
+if (doc.parentWindow.event.srcElement.innerhtml = "Save as list 1")
+	{
+	current_delegate_list :=""
+	loop % ui.document.getElementById("delegates").rows.length		
 		{
-		LV_Modify(rowcount, "+Check")
-		checkedrow++
+		rowclass := ui.document.getElementById("delegates").rows[a_index].classname
+		Ifnotinstring rowclass, filtered	; visible row	
+			if rowclass
+				current_delegate_list .= ui.document.getElementById("delegates").rows[a_index].cells[1].innertext "`n"
+		}		
+		FileDelete list1.txt
+		Fileappend %current_delegate_list%, list1.txt	
+		doc.parentWindow.event.srcElement.innerhtml .= " - Saved"
+		sleep 1000
+		doc.parentWindow.event.srcElement.innerhtml := "Save as list 1"
+	}
+	
+if (doc.parentWindow.event.srcElement.innerhtml = "Save as list 2")
+	{
+	current_delegate_list :=""
+	loop % ui.document.getElementById("delegates").rows.length		
+		{
+		rowclass := ui.document.getElementById("delegates").rows[a_index].classname
+		Ifnotinstring rowclass, filtered	; visible row	
+			if rowclass
+				current_delegate_list .= ui.document.getElementById("delegates").rows[a_index].cells[1].innertext "`n"
+		}		
+		FileDelete list1.txt
+		Fileappend %current_delegate_list%, list2.txt	
+		doc.parentWindow.event.srcElement.innerhtml .= " - Saved"
+		sleep 1000
+		doc.parentWindow.event.srcElement.innerhtml := "Save as list 2"
+	}
+
+	
+if (doc.parentWindow.event.srcElement.innerhtml = "Voted Delegates")
+	{
+	ui.document.getElementById("selectfilter").value := "all"
+	ui.document.getElementById("search").value := "✔"
+
+	;js = $("#delegates").trigger("update");
+;	ui.document.parentwindow.execScript(js)	
+    
+	}
+	
+;############	quick action buttons #############
+	
+if (doc.parentWindow.event.srcElement.innerhtml = "Reset Filter")
+	{
+	js = $('#delegates').trigger('filterReset');
+	ui.document.parentwindow.execScript(js)
+	gosub countstuff
+	return
+	}
+
+	
+if (doc.parentWindow.event.srcElement.innerhtml = "Clone A1 marks to all accounts")
+	{
+	loop % ui.document.getElementById("delegates").rows.length		
+		{
+		accc3 := a_index
+		rowclass := ui.document.getElementById("delegates").rows[a_index].classname
+		Ifinstring rowclass, filtered	; not visible row	
+			continue
+		if !rowclass
+			continue
+		A1 := ui.document.getElementById("delegates").rows[a_index].cells[3].innertext 	
+		
+
+		loop % count_accounts	
+			{
+			AC := ui.document.getElementById("delegates").rows[accc3].cells[3 + a_index].innertext 	
+			if (A1 = "⇈" AND AC = "✘")
+				ui.document.getElementById("delegates").rows[accc3].cells[3 + a_index].innertext := "⇈", ui.document.getElementById("delegates").rows[accc3].cells[3 + a_index].style.color := "blue"
+			if (A1 = "⇊" AND AC = "✔")
+				ui.document.getElementById("delegates").rows[accc3].cells[3 + a_index].innertext := "⇊", ui.document.getElementById("delegates").rows[accc3].cells[3 + a_index].style.color := "blue"
+			}
+		
+		
+		}		
+		
+	}
+
+	
+;##################################################
+If (doc.parentWindow.event.srcElement.id = "cancel_button")
+	ui.document.getElementById("editpass").style.display := "none"
+	
+column := doc.parentWindow.event.srcElement.classname
+
+
+if (column = "tablesorter-filter")
+	{
+	;todo supress or delay click action until update happened
+	js = $("#delegates").trigger("update");
+	;ui.document.parentwindow.execScript(js)	
+	return
+	}
+
+if column = acc
+	{
+
+	;cellstyle := doc.parentWindow.event.srcElement.style.color
+	celltext := doc.parentWindow.event.srcElement.innerhtml
+
+	if (celltext = "✔")
+		doc.parentWindow.event.srcElement.innerhtml := "⇊", doc.parentWindow.event.srcElement.style.color := "blue", doc.parentWindow.event.srcElement.title := "Unvote!"
+	else if (celltext = "✘")
+		doc.parentWindow.event.srcElement.innerhtml := "⇈", doc.parentWindow.event.srcElement.style.color := "blue", doc.parentWindow.event.srcElement.title := "Vote!"
+		
+	
+	else if (celltext = "⇊")
+		doc.parentWindow.event.srcElement.innerhtml := "✔", doc.parentWindow.event.srcElement.style.color := "green", doc.parentWindow.event.srcElement.title := "Voted"
+		
+	else if (celltext = "⇈")
+		doc.parentWindow.event.srcElement.innerhtml := "✘", doc.parentWindow.event.srcElement.style.color := "red", doc.parentWindow.event.srcElement.title := "Not voted"
+
+	gosub countstuff	
+		
+		
+	js = $("#delegates").trigger("update");
+	;ui.document.parentwindow.execScript(js)
+	}
+
+
+;doc.parentWindow.event.srcElement.style.background := "purple"
+;msgbox % ui.document.getElementById("delegates").rows[doc.parentWindow.event.srcElement.parentElement.id].cells[5].outerhtml
+;    MsgBox, % doc.parentWindow.event.srcElement.innerhtml "`n" doc.parentWindow.event.srcElement.OuterHtml "`n" doc.parentWindow.event.srcElement.parentElement.id "`n" doc.parentWindow.event.srcElement.classname
+}
+return
+
+; get stats based on what accounts got marked for vote/unvote
+countstuff:
+loop % count_accounts {
+accc2 := a_index
+votedcount_%accc2% := 0, count_visible := 0
+if !voteraddress_%a_index%
+	continue
+
+count_voted := "0"	, count_notvoted := "0", count_vote := "0", count_unvote := "0", votinglist%accc2% := ""
+loop % ui.document.getElementById("delegates").rows.length	
+	{
+	rowclass := ui.document.getElementById("delegates").rows[a_index].classname
+
+	celltext := ui.document.getElementById("delegates").rows[a_index].cells[2 + accc2].innerHTML
+
+		
+	if (celltext = "✔")
+		count_voted ++
+	else if (celltext = "✘")
+		count_notvoted ++
+	else if (celltext = "⇊")
+		{
+		count_unvote ++
+		if votinglist%accc2%
+			votinglist%accc2% .= ","
+		votinglist%accc2% .= "-" ui.document.getElementById("delegates").rows[a_index].getAttribute("pubkey")
 		}
-	;if delegate_username = Vega				; little bit of self interest
-		;LV_Modify(rowcount, "+Check")			; never hurt anyone
+	else if (celltext = "⇈")
+		{
+		count_vote ++
+		if votinglist%accc2%
+			votinglist%accc2% .= ","
+		votinglist%accc2% .= "+" ui.document.getElementById("delegates").rows[a_index].getAttribute("pubkey")
+		
+		}
 	
 	}
-		
-loop % LV_GetCount("Col")	
-	if a_index not in 7,8,9,10,15,16
-		LV_ModifyCol(a_index,"AutoHdr")
 
-loop % LV_GetCount()	
+count_voted += count_unvote
+ui.document.getElementById("info_tovotes" accc2).innerhtml := count_vote
+ui.document.getElementById("info_tounvotes" accc2).innerhtml := count_unvote
+ui.document.getElementById("info_totalvotes" accc2).innerhtml := count_voted + count_vote - count_unvote
+ui.document.getElementById("info_votes" a_index).innerhtml := count_voted
+;ui.document.getElementById("info_visible").innerhtml := "Delegates displayed: " count_visible
+
+if ui.document.getElementById("info_totalvotes" accc2).innerhtml > 101
+	ui.document.getElementById("info_totalvotes" accc2).style.color := "red"
+else
+	ui.document.getElementById("info_totalvotes" accc2).style.color := "black"
+}
+return
+
+;########### get how many delegates are showing ############
+; needed when list is filtered
+delegates_displayed:
+IfWinNotActive ahk_class AutoHotkeyGUI
+	return
+Thread, NoTimers	
+
+
+displayed_rows := ui.document.getElementById("delegates").rows.length - ui.document.getElementsByClassName("filtered").length - 1
+
+ui.document.getElementById("info_visible").innerhtml := displayed_rows
+return
+	
+;########## Vote/unvote selected delegates ##############
+; this part does the actual voting based on marks
+VOTE_UNVOTE:
+
+if (InStr(node, "http://") AND !InStr(node, "localhost"))
 	{
-	LV_GetText(vf, a_index, 7)
-	if vf
-		LV_ModifyCol(7, 60)
-	LV_GetText(vf, a_index, 8)
-	if vf
-		LV_ModifyCol(8, 60)
-	LV_GetText(vf, a_index, 9)
-	if vf
-		LV_ModifyCol(9, 60)
-	LV_GetText(vf, a_index, 10)
-	if vf
-		LV_ModifyCol(10, 60)
+	ui.document.getElementById("info").innerhtml .= "<div id='info_warning'>The Node URL you provided doesn't have an SSL certificate. Please select use another node for security reasons.</div>"
+	return
 	}
 
-if isdelegate_1
-	LV_ModifyCol(11, 80)	; show voted you column
+loop % count_accounts
+	{
+	count := 0, pubkeylist := "", accc := a_index
+	loop, parse, votinglist%a_index%, `,
+		{
+		if pubkeylist
+			pubkeylist .= ","
+		pubkeylist .= """" a_loopfield """"
+		count++
+		if count = 33
+			{
+			gosub sendtransaction
+			count := 0, pubkeylist := ""
+			}
+		}
+	if pubkeylist
+		gosub sendtransaction
+	}
+gosub countstuff
+return	
 
-	if !isdelegate_1
-	LV_ModifyCol(11, 0)	; show voted you column
-LV_ModifyCol(1,"25")
-delegatelistcount := LV_GetCount()
-GuiControl,,%info2%,Delegates displayed: %delegatelistcount%
-GuiControl,, % info3 ,% "Delegates Selected: " checkedrow
-GuiControl,,delegatelisted,Delegates listed: %delegatelistcount%
-GuiControl,,delegatecount,Total Delegates: %TotalDelegateCount%
+sendtransaction:
+passphrase := CodeG(passp1_%accc%,-1,"whatever")
+
+secdata := CodeG(passp2_%accc%,-1,"whatever")
+if secdata
+	secdata = "secondSecret":"%secdata%",
+	
+voterpubkey :=	voterpubkey_%accc%
+data = {"secret":"%passphrase%", %secdata% "publicKey":"%voterpubkey%", "delegates":[%pubkeylist%]}
+
+oHTTP.Open("PUT", nodeurl "/api/accounts/delegates", false)
+oHTTP.setRequestHeader("Content-Type", "application/json")
+oHTTP.Send(data)
+responsetext := oHTTP.ResponseText
+
+Ifinstring responsetext, {"success":true
+	loop % ui.document.getElementById("delegates").rows.length
+		{
+		pubkey := ui.document.getElementById("delegates").rows[a_index].getAttribute("pubkey")
+		if !pubkey
+			continue
+		ifinstring responsetext,+%pubkey%
+			ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].innerHTML := "✔", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].style.color := "green", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].title := "Successfully Voted!", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].style.backgroundColor := "#00FF00"
+		ifinstring responsetext,-%pubkey%
+			ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].innerHTML := "✘", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].style.color := "red", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].title := "Successfully Unvoted!", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].style.backgroundColor := "#00FF00"
+		}
+	
+shortresponse := Regexreplace(responsetext,"{("".*?"":true),.*","$1")
+FormatTime time,%a_now%,HH:mm:ss			
+ui.document.getElementById("logentries").innerhtml := time a_tab "Account " accc " - " shortresponse "<br>" ui.document.getElementById("logentries").innerhtml
+
+FileAppend %a_now%%a_tab%account%accc%%a_tab%%responsetext%`n,%ScriptName%.log
+passphrase := "", secdata := "", data := ""
+gosub countstuff
+return
+	
+	
+; Getting list of accounts you voted for
+getvotedlist:
+if ui.document.getElementById("delegates").rows.length = 0
+	return
+	
+if !accc
+	accc = 1
+	
+votedcount_%accc% := 0
+
+if !voteraddress_%accc%
+	return
+
+voted_%accc% := oHTTP.ResponseText(oHTTP.Send(oHTTP.Open("GET",nodeurl "/api/accounts/delegates/?address=" voteraddress_%accc%)))
+
+	loop % ui.document.getElementById("delegates").rows.length
+		ifinstring voted_%accc%, % ui.document.getElementById("delegates").rows[a_index].getAttribute("address")
+			{
+			ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].innerHTML := "✔", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].style.color := "green", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].title := "Voted"
+			votedcount_%accc%++
+			}
+			
+		else	
+			ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].innerHTML := "✘", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].style.color := "red", ui.document.getElementById("delegates").rows[a_index].cells[2 + accc].title := "Not Voted"
+
+
+votedcount_%accc%--			
+ui.document.getElementById("info_votes" a_index).innerhtml := votedcount_%accc%
 
 return
 
 ;##### get full delegate list from node #####
 getdelegatelist:
-newline := "Getting full delegate list"
-gosub updatestatus
 
-limit := "100", offset := "0",delegate_list :="",countlist:=""
-loop 20 {
-url := node "/api/delegates?limit=100&offset=" offset "&orderBy=rate"
-delegate_list .= WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",url)))
-offset += limit
-if a_index = 1	; get total delegate count
-	TotalDelegateCount := regexreplace(delegate_list,".*""totalCount"":(.*?)}","$1"), TotalCount := ceil(regexreplace(delegate_list,".*""totalCount"":(.*?)}","$1") / limit)		; determine how many api calls needed to get all delegates info
+limit := "100", offset := "0",countlist:=""
+tablehtml := delegate_table
+response := oHTTP.ResponseText(oHTTP.Send(oHTTP.Open("GET",nodeurl "/api/delegates?limit=100&offset=" offset "&orderBy=rate:asc")))
+totalcount := regexreplace(response,".*,""totalCount"":(.*?)}.*","$1"), req_loop := ceil((totalcount / 100)) - 1
 
-if a_index = %TotalCount%
-	break
-}
-isdelegate_1 := ""
-IfInString delegate_list, %voteraddress_1%
-	isdelegate_1 := "YES"
-
-newline := "Got full delegate list (" TotalDelegateCount " Delegates)"
-gosub updatestatus
-
-GuiControl,, %info1%,% "Delegates total: " TotalDelegateCount 
-
-return
-
-
-; get the list of accounts voted for your delegate
-getvotedlist:
-newline := "Getting list of accounts you voted for"
-	gosub updatestatus
-loop 5 {
-if !voteraddress_%a_index%
-	continue
-voted_%a_index% := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/accounts/delegates/?address=" voteraddress_%a_index%)))
-
-StringReplace, voted_%a_index%, voted_%a_index%, username, username, UseErrorLevel
-votedcount_%a_index% := ErrorLevel
-infoline := info (a_index + 3)
-
-GuiControl,, % info%infoline% ,% "Account " a_index ": votes cast " votedcount_%a_index% " (of 101)"
-
-;newline := "Already voted for " votedcount_%a_index% " delegates with account " a_index
-;gosub updatestatus
-}
-return
-
-
-;########## Vote/unvote selected delegates ##############
-VOTE_UNVOTE:
-
-ifinstring node, http://
-	MsgBox , 260, Unencrypted connection to Node, To vote`, the script needs to send your passphrase(s) to your node as POST data.`nSending you passphrase(s) through an unencrypted connection is a security risk.`n`nDo you want to continue anyway?
-	IfMsgBox No
-		{
-		newline := "Voting was interrupted (No https connection)"
-		gosub updatestatus
-		return
+loop % req_loop {
+	offset += 100
+	response .= oHTTP.ResponseText(oHTTP.Send(oHTTP.Open("GET",nodeurl "/api/delegates?limit=100&offset=" offset "&orderBy=rate:asc")))
 		}
+	
+; get data from response and put it into html		
+tablehtml .= "<tbody>"
 
-voteprefix := "+"	
-If A_GuiControl = Unvote Selected
-	voteprefix := "-"
+Pos := 1
+regex = "username":"(.*?)","address":"(.*?)","publicKey":"(.*?)","vote":"(.*?)","producedblocks":(.*?),"missedblocks":(.*?),"rate":(.*?),"approval":(.*?),"productivity":(.*?)}
+While Pos {
+	Pos:=RegExMatch(response,regex, d, Pos+StrLen(d1) )
+	if !d
+		Break
 
+ row = <tr id='%a_index%' address='%d2%' pubkey='%d3%'><td class='rank'>%d7%</td><td class='username' Title='Address: %d2%'><a address='%d2%' href='#'>%d1%</a></td></td><td class='voted'></td>%account_cols2%<td class='approval'>%d8% `%</td><td class='productivity'>%d9% `%</td><td class=forged''>%d5%</td><td class='missed'>%d6%</td></tr>`n
+tablehtml .= row "`n"  
 
-Gui +OwnDialogs
-loop % accountcount 
+loop % count_accounts		; replace address with name in account info if match found
 	{
-	tovotelist%a_index% := "", tovotecount%a_index%:="0", novotecount%a_index%:="0",countselected:="",votemaxed_%a_index%:=""
-	
-	if (voteprefix = "+" AND votedcount_%a_index% = "101")	; no more voting spots for account	
-		{
-		newline := "Account " a_index " has already voted for 101 delegates"
-		gosub updatestatus
-		votemaxed_%a_index% := 1
-		}
+	aaa := ui.document.getElementById("info_address" a_index).innerhtml
+	if aaa contains %d2%
+		ui.document.getElementById("info_address" a_index).innerhtml := d1
 	}
-	
-Gui, submit,nohide	
-RowNumber:=0
-	
-loop 5 
-	{
-	voted_%a_index% := WinHttpReq.ResponseText(WinHttpReq.Send(WinHttpReq.Open("GET",node "/api/accounts/delegates/?address=" voteraddress_%a_index%)))
-	tovotelist%a_index% :="", novotecount%a_index%:="",tovotecount%a_index%:=0
-	}
-	
-Loop		; get selected rows from lisview 
-{
-	RowNumber := LV_GetNext(RowNumber,"checked")
-	if not RowNumber 
-		break
-	countselected := a_index	
-	LV_GetText(publickey, RowNumber,"16")	; get public key			
-	LV_GetText(un, RowNumber,"4")
-	
-	
-	loop 5 {
-	
-	if !voted_%a_index%
-		continue
-		
-	if ((voteprefix = "+" AND !InStr(voted_%a_index%, publickey)) OR (voteprefix = "-" AND InStr(voted_%a_index%, publickey))) 
-		{	
-		if ((voteprefix = "+") AND (tovotecount%a_index% > (101 - votedcount_%a_index%) - 1))	; no more voting spots for account
-			continue
-
-		tovote = "%voteprefix%%publickey%"
-		tovotecount%a_index%++
-		}
-	else
-		novotecount%a_index%++
-		
-	if !tovote
-		continue
-	
-	if (voteprefix = "+" AND InStr(voted_%a_index%, publickey)) 
-		continue
-
-	if (voteprefix = "-" AND !InStr(voted_%a_index%, publickey)) 
-		continue
-
-	ifinstring tovotelist%a_index%, %tovote%
-		continue
-	
-	if tovotelist%a_index%
-		if tovotecount%a_index% >= 33		; bulk vote maximum allowed
-			tovotelist%a_index% .= "|", tovotecount%a_index% := 0
-	else	
-		tovotelist%a_index% .= ","
-	
-	tovotelist%a_index% .= tovote
-	tovotelist%a_index%_names .= un "`n"
-
-	}	
 
 }
-
-if !countselected	; no delegate selected
-	Return
-
-; display some voting data in status log
-newline := delegatelistcount " Delegate names displayed - " countselected " selected"
-gosub updatestatus
-
-;###### now, do the actual voting ######
-loop % accountcount {			; vote from every account
-count := a_index
-if votemaxed_%a_index% = 1	
-	continue
-votingfor_count := countselected - novotecount%count%
-
-newline := "Account " count " already voted for " novotecount%count% " voting for: " votingfor_count
-if voteprefix = -
-	newline := "Account " count " unvoting " votingfor_count
-gosub updatestatus	
-
-if votingfor_count = 0
-	continue
-
-secdata:=""
-	passphrase := pass%count%, voterpubkey := voterpubkey_%count%, secondpassphrase := pass_%count%_2
-	
-	stringsplit tovotelistpart,tovotelist%count%,|	
-	
-	
-	if (secondsig_%count% > 0 AND tovotelistpart0 > 0)	; there is a second passphrase for this account
-		{
-		Prompt := "Your account " voteraddress_%count% " has a second passphrase`n`nPlease enter it here" 
-		if !secondpassphrase
-		InputBox, secondpassphrase , Second Passphrase Required, %Prompt%, HIDE, 410, 160, , , , , 
-		if secondpassphrase
-			secdata = "secondSecret":"%secondpassphrase%",
-		If ErrorLevel
-			{
-			newline := "Account " count " didn't (un)vote, no second passphrase provided"
-			gosub updatestatus
-			break
-			}
-		}
-
-	loop % tovotelistpart0 ; send the vote api calls
-	{
-	delegates := tovotelistpart%a_index%
-	data = {"secret":"%passphrase%", %secdata% "publicKey":"%voterpubkey%", "delegates":[%delegates%]}
-	
-	
-;clipboard :=  tovotelist0 "`n" tovotelist%a_index%_names "`n`n" data
-;msgbox % clipboard
-	
-	oHTTP.Open("PUT", node "/api/accounts/delegates", false)
-	oHTTP.setRequestHeader("Content-Type", "application/json")
-	oHTTP.Send(data)
-	responsetext := oHTTP.ResponseText
-	
-	newline := "Server response: " responsetext
-	stringreplace nopassdata, data, %passphrase%,secretpassphrase
-	stringreplace nopassdata, nopassdata, %secondpassphrase%,secretpassphrase2
-	FileAppend voterequest: %nopassdata%`n%newline%`n,voteresponse.log	
-	
-	Ifinstring responsetext, "success":true
-		{
-		newline := "Account " count " successfully voted for: " tovotecount%count% " delegate(s)"
-		if voteprefix = -
-			newline := "Account " count " successfully unvoted " tovotecount%count% " delegate(s)"
-		}
-
-	Ifinstring responsetext, "error"
-		newline := "Account " count " Error: " RegExReplace(responsetext,".*error"":""(.*?)"".*","$1")
-		
-	gosub updatestatus	
-	newline := "Waiting 15 secs for Lisk to process new votes"
-	gosub updatestatus			
-	sleep 15000
-
-	}
-	
-}
-
-gosub startcheck			; update delegate info
+tablehtml .= "</tbody>"
+ui.document.getElementById("delegates").innerhtml := tablehtml
 return
+	
 
-
+	
+	
 ;# just stuff to make editing the script easier for me
 #IfWinActive ahk_group justthiswin
 ~^s::
@@ -918,6 +725,10 @@ Sleep 500
 reload
 return
 #IfWinActive
+
+
+GuiClose:
+ExitApp
 
 
 ;############### FUNCTIONS ##############
@@ -933,15 +744,47 @@ response := oHTTP.ResponseText
 return response
 }
 
-SetEditPlaceholder(control, string, showalways = 0){
-	if control is not number
-		GuiControlGet, control, HWND, %control%
-	if(!A_IsUnicode){
-		VarSetCapacity(wstring, (StrLen(wstring) * 2) + 1)
-		DllCall("MultiByteToWideChar", UInt, 0, UInt, 0, UInt, &string, Int, -1, UInt, &wstring, Int, StrLen(string) + 1)
+; needed to sense trying in html input box fields
+WM_KEYDOWN(wParam, lParam, nMsg, hWnd)  ;// modeled after code written by lexikos
+{
+	global	ui, pipa
+	static	fields :=	"hWnd,nMsg,wParam,lParam,A_EventInfo,A_GuiX,A_GuiY"
+	WinGetClass, ClassName, ahk_id %hWnd%
+	if	(ClassName = "Internet Explorer_Server")
+	{
+		;// Build MSG Structure
+		VarSetCapacity(Msg, 48)
+		Loop Parse, fields, `,
+			NumPut(%A_LoopField%, Msg, (A_Index-1)*A_PtrSize)
+		;// Call Translate Accelerator Method
+		TranslateAccelerator :=	NumGet(NumGet(1*pipa)+5*A_PtrSize)
+		Loop 2 ;// only necessary for Shell.Explorer Object
+			r :=	DllCall(TranslateAccelerator, "Ptr",pipa, "Ptr",&Msg)
+		until	wParam != 9 || ui.document.activeElement != ""
+	
+		if	r = 0 ;// S_OK: the message was translated to an accelerator.
+			return	0
 	}
-	else
-		wstring := string
-	DllCall("SendMessageW", "UInt", control, "UInt", 0x1501, "UInt", showalways, "UInt", &wstring)
-	return
 }
+return
+
+;https://autohotkey.com/board/topic/54882-random-encryption/	
+CodeG(x,E,K1=0,K2=1,K3=2,K4=3) { ; x: data string, E=1|-1: encode|decode, K1..4: 32 bit unsigned keys
+   If (C1!=K1 || C2!=K2 || C3!=K3 || C4!=K4) {
+      L := 224, C1 := K1 , C2 := K2 , C3 := K3 , C4 := K4
+      Loop %L%
+         D%A_Index% := 0, S .= Chr(A_Index+31)
+      Loop 4 {
+         Random,,K%A_Index%
+         Loop %L% {
+            Random D, 0, L-1
+            D%A_Index% := mod(D+D%A_Index%,L)
+         }
+      }
+   }
+   C =
+   Loop Parse, x
+      C .= " "<=(A:=A_LoopField) ? SubStr(S,mod(InStr(S,A,1)+L-1+E*D%A_Index%,L)+1,1) : A
+   Return C
+}
+
