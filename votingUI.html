@@ -257,6 +257,21 @@ width:25px;
 #votebutton{
 text-align: center;
 }
+
+#helpq {
+float:right;
+border:1px solid;
+padding:2px;
+}
+#help {
+display:none;
+}
+
+#helpq:hover #help {
+   display : block;
+   padding:5px;
+ }
+
 </style>
 
 </head>
@@ -278,11 +293,31 @@ text-align: center;
 	</table> 
 
 	<div id="sidebar">
+	<div id='helpq'>Help - How to use?
+		<div id='help'>
+		Go to settings and provide your passhprases. After that you will see new columns called A1, A2, etc, that will show what delegate you voted for and from what account.<p>
+		You will see :<br>
+		<span style='color:green;'>✔</span> - if you voted <br>
+		<span style='color:red;'>✘</span> - if not yet voted<p>
+		Click the <span style='color:red;font-weight:bold;'>✘</span> if you want to vote for that delegate, and click <span style='color:green;font-weight:bold;'>✔</span> if you want to unvote.<br>The cell will change to:<br>
+		<span style='color:blue;font-weight:bold;'>⇈</span> - marked to be voted
+		<br><span style='color:blue;font-weight:bold;'>⇊</span> - marked to be unvoted
+		<p>
+		If you mark any to vote/unvote you will see the count change in the Info box.
+		<br>
+		When you are all done selecting the changes you want, just click the "Vote/Unvote!" button to make the transaction(s) based on your marks.
+		<p>
+		If you want to make the same changes for some (or all) of your accounts you can just make your selections in column A1, then click on the "Clone A1 marks to all accounts" to copy them.
+		</div></div>
+	
 		<div id="filtersandstuff">
 		<fieldset id='filters'>
 		 </fieldset>		
 		</div> 
-				
+	
+
+
+	
 	<div id="infobox">
 	<fieldset><legend>Info Box</legend>
 		<div id='basicinfo'></div>
@@ -347,8 +382,9 @@ text-align: center;
 	</div>
 	
 
-
 </div>
+
+
 <script>
 $(function(){
   $('#delegates').tablesorter({
@@ -375,5 +411,14 @@ $(function(){
   
 });
 </script>
+
+
+<script>
+function showhelp() {
+
+}
+
+</script>
+
 </body>
 </html>
