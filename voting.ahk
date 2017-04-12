@@ -694,7 +694,7 @@ loop % req_loop {
 tablehtml .= "<tbody>"
 
 Pos := 1
-regex = "username":"(.*?)","address":"(.*?)","publicKey":"(.*?)","vote":"(.*?)","producedblocks":(.*?),"missedblocks":(.*?),"rate":(.*?),"approval":(.*?),"productivity":(.*?)}
+regex = "username":"(.*?)","address":"(.*?)","publicKey":"(.*?)","vote":"(.*?)","producedblocks":(.*?),"missedblocks":(.*?),.*?"rank":(.*?),"approval":(.*?),"productivity":(.*?)}
 While Pos {
 	Pos:=RegExMatch(response,regex, d, Pos+StrLen(d1) )
 	if !d
